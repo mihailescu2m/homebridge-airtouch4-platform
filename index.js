@@ -69,9 +69,9 @@ Airtouch.prototype.updateACStatus = function(ac_status) {
 			var uuid = UUIDGen.generate(unit_name);
 			var unit = new Accessory(unit_name, uuid);
 			unit.log = this.log;
-			//unit.context.manufacturer = this.config.units[unit_status.ac_unit_number].manufacturer || "N/A";
-			//unit.context.model = this.config.units[unit_status.ac_unit_number].model || "N/A";
-			//unit.context.serial = unit_status.ac_unit_number;
+			unit.context.manufacturer = this.config.units[unit_status.ac_unit_number].manufacturer || "N/A";
+			unit.context.model = this.config.units[unit_status.ac_unit_number].model || "N/A";
+			unit.context.serial = unit_status.ac_unit_number;
 			this.setupAC(unit);
 			this.units[unit_name] = unit;
 			this.platform.registerPlatformAccessories("homebridge-airtouch4-platform", "Airtouch", [unit]);
@@ -86,41 +86,76 @@ Airtouch.prototype.setupAC = function(accessory) {
 		cb();
 	});
 	accessory.getService(Service.AccessoryInformation)
-		.setCharacteristic(Characteristic.Manufacturer, "accessory.context.manufacturer")
-		.setCharacteristic(Characteristic.Model, "accessory.context.model")
-		.setCharacteristic(Characteristic.SerialNumber, "accessory.context.serial");
-	var service = accessory.getService(Service.Thermostat);
-	if (service === undefined)
-		service = accessory.addService(Service.Thermostat, accessory.displayName);
-    service
-        .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
-        .on("get", this.getCurrentHeatingCoolingState.bind(accessory));
-    service
-        .getCharacteristic(Characteristic.TargetHeatingCoolingState)
-        .on("get", this.getTargetHeatingCoolingState.bind(accessory))
-        .on("set", this.setTargetHeatingCoolingState.bind(accessory));
-    service
-        .getCharacteristic(Characteristic.CurrentTemperature)
-        .on("get", this.getCurrentTemperature.bind(accessory));
-    service
-        .getCharacteristic(Characteristic.TargetTemperature)
-        .on("get", this.getTargetTemperature.bind(accessory))
-        .on("set", this.setTargetTemperature.bind(accessory));
-    service
+		.setCharacteristic(Characteristic.Manufacturer, accessory.context.manufacturer)
+		.setCharacteristic(Characteristic.Model, accessory.context.model)
+		.setCharacteristic(Characteristic.SerialNumber, accessory.context.serial.toString());
+	var thermostat = accessory.getService(Service.HeaterCooler);
+	if (thermostat === undefined)
+		thermostat = accessory.addService(Service.HeaterCooler, accessory.displayName);
+	thermostat
+		.getCharacteristic(Characteristic.Active)
+		.on("get", this.acGetActive.bind(accessory))
+		.on("set", this.acSetActive.bind(accessory));
+    thermostat
+        .getCharacteristic(Characteristic.CurrentHeaterCoolerState)
+        .on("get", this.acGetCurrentHeaterCoolerState.bind(accessory));
+    thermostat
+        .getCharacteristic(Characteristic.TargetHeaterCoolerState)
+        .on("get", this.acGetTargetHeaterCoolerState.bind(accessory))
+        .on("set", this.acSetTargetHeaterCoolerState.bind(accessory));
+	thermostat
+		.getCharacteristic(Characteristic.CurrentTemperature)
+		.on("get", this.acGetCurrentTemperature.bind(accessory));
+    thermostat
+        .getCharacteristic(Characteristic.CoolingThresholdTemperature)
+        .on("get", this.acGetTargetTemperature.bind(accessory))
+		.on("set", this.acSetTargetTemperature.bind(accessory));
+	thermostat
+		.getCharacteristic(Characteristic.HeatingThresholdTemperature)
+		.on("get", this.acGetTargetTemperature.bind(accessory))
+		.on("set", this.acSetTargetTemperature.bind(accessory));
+	var fan_speeds = this.config.units[accessory.context.serial].fan;
+	accessory.context.fan_step = Math.floor(100/(Object.keys(fan_speeds).length-1));
+	thermostat
+		.getCharacteristic(Characteristic.RotationSpeed)
+		.setProps({
+			minStep: accessory.context.fan_step,
+			minValue: 0,
+			maxValue: accessory.context.fan_step*(Object.keys(fan_speeds).length-1)
+		})
+		.on("get", this.acGetRotationSpeed.bind(accessory))
+		.on("set", this.acSetRotationSpeed.bind(accessory));
+    thermostat
         .getCharacteristic(Characteristic.TemperatureDisplayUnits)
-        .on("get", this.getTemperatureDisplayUnits.bind(accessory))
-        .on("set", this.setTemperatureDisplayUnits.bind(accessory));
-    service
+        .on("get", this.acGetTemperatureDisplayUnits.bind(accessory))
+        .on("set", this.acSetTemperatureDisplayUnits.bind(accessory));
+    thermostat
         .getCharacteristic(Characteristic.Name)
-        .on("get", this.getName.bind(accessory));
+        .on("get", this.acGetName.bind(accessory));
 
-	//this.log(this.config.units);
-	//this.log(accessory.context.serial);
-	//this.log(this.config.units[accessory.context.serial]);
-	//fan_speeds = this.config.units[accessory.context.serial].fan;
+	//var spill = accessory.getService(Service.Switch);
+	//if (spill === undefined)
+	//	spill = accessory.addService(Service.Switch);
+	//spill
+	//	.setCharacteristic(Characteristic.Name, "Spill")
+	//	.getCharacteristic(Characteristic.On)
+	//	.setProps({
+	//		perms: ["pr", "ev"]
+	//	})
+	//	.on("get", this.acGetSpill.bind(accessory));
+		//.on("get", this.getRotationSpeed.bind(accessory));
+
+
+	//var fan_speeds = this.config.units[accessory.context.serial].fan;
 	//accessory.context.fan_step = Math.floor(100/(Object.keys(fan_speeds).length-1));
-	//service
-	//	.addCharacteristic(Characteristic.RotationSpeed)
+	//var fan = thermostat.getCharacteristic(Characteristic.RotationSpeed);
+	//var fan = accessory.getService(Service.Fan);
+	//if (fan === undefined)
+		//fan = accessory.addService(Service.Fan, accessory.displayName);
+	//	fan = thermostat.addCharacteristic(Characteristic.RotationSpeed);
+	//fan
+	//	.setCharacteristic(Characteristic.Active, 1)
+	//	.getCharacteristic(Characteristic.RotationSpeed)
 	//	.setProps({
 	//		minStep: accessory.context.fan_step,
 	//		minValue: 0,
@@ -128,7 +163,7 @@ Airtouch.prototype.setupAC = function(accessory) {
 	//	})
 	//	.on("get", this.getRotationSpeed.bind(accessory))
 	//	.on("set", this.setRotationSpeed.bind(accessory));
-	service.isPrimaryService = true;
+	//thermostat.isPrimaryService = true;
 	accessory.context.temperatureDisplayUnits = 0;
 	this.log("Finished creating accessory [" + accessory.displayName + "]");
 };
@@ -137,76 +172,91 @@ Airtouch.prototype.setupAC = function(accessory) {
 Airtouch.prototype.updateAC = function(accessory, status) {
 	accessory.context.currentTemperature = status.ac_temp;
 	accessory.context.targetTemperature = status.ac_target;
+	accessory.context.active = status.ac_power_state;
 	if (status.ac_power_state == 0) // OFF
-		accessory.context.currentHeatingCoolingState = 0;
+		accessory.context.currentHeaterCoolerState = 0;
 	else if (status.ac_mode == 1) // HEAT
-		accessory.context.currentHeatingCoolingState = 1;
+		accessory.context.currentHeaterCoolerState = 1;
 	else if (status.ac_mode == 4) // COOL
-		accessory.context.currentHeatingCoolingState = 2;
+		accessory.context.currentHeaterCoolerState = 2;
 	else // AUTO set for: {2=DRY, 3=FAN, 8=AUTO-HEAT, 9=AUTO-COOL}
-		accessory.context.currentHeatingCoolingState = 3;
-	accessory.context.targetHeatingCoolingState = accessory.context.currentHeatingCoolingState;
-	//accessory.context.rotationSpeed = status.ac_fan_speed * accessory.context.fan_step;
+		accessory.context.currentHeaterCoolerState = 3;
+	accessory.context.targetHeaterCoolerState = accessory.context.currentHeaterCoolerState;
+	accessory.context.rotationSpeed = status.ac_fan_speed * accessory.context.fan_step;
+	accessory.context.spill = status.ac_spill;
+	accessory.context.timer = status.ac_timer_set;
+	accessory.context.error = status.ac_error_code;
 	this.log("Finished updating accessory [" + accessory.displayName + "]");
 	accessory.updateReachability(true);
 };
 
-Airtouch.prototype.getCurrentHeatingCoolingState = function(cb) {
-	cb(null, this.context.currentHeatingCoolingState);
+Airtouch.prototype.acGetActive = function(cb) {
+	cb(null, this.context.active);
 };
 
-Airtouch.prototype.getTargetHeatingCoolingState = function(cb) {
-	cb(null, this.context.targetHeatingCoolingState);
-};
-
-Airtouch.prototype.setTargetHeatingCoolingState = function(val, cb) {
+Airtouch.prototype.acSetActive = function(val, cb) {
 	// todo: actual control AC
-	this.context.targetHeatingCoolingState = val;
-	// todo: remove this, as it will be set from callback when AC updates
-	this.getService(Service.Thermostat)
-		.setCharacteristic(Characteristic.CurrentHeatingCoolingState, val);
+	this.context.active = val;
 	cb();
 };
 
-Airtouch.prototype.getCurrentTemperature = function(cb) {
+Airtouch.prototype.acGetCurrentHeaterCoolerState = function(cb) {
+	cb(null, this.context.currentHeaterCoolerState);
+};
+
+Airtouch.prototype.acGetTargetHeaterCoolerState = function(cb) {
+	cb(null, this.context.targetHeaterCoolerState);
+};
+
+Airtouch.prototype.acSetTargetHeaterCoolerState = function(val, cb) {
+	// todo: actual control AC
+	this.context.targetHeaterCoolierState = val;
+	// todo: remove this, as it will be set from callback when AC updates
+	this.getService(Service.HeaterCooler)
+		.setCharacteristic(Characteristic.CurrentHeaterCoolerState, val);
+	cb();
+};
+
+Airtouch.prototype.acGetCurrentTemperature = function(cb) {
 	cb(null, this.context.currentTemperature);
 };
 
-Airtouch.prototype.getTargetTemperature = function(cb) {
+Airtouch.prototype.acGetTargetTemperature = function(cb) {
 	cb(null, this.context.targetTemperature);
 };
 
-Airtouch.prototype.setTargetTemperature = function(val, cb) {
+Airtouch.prototype.acSetTargetTemperature = function(val, cb) {
 	// todo: actual control AC
 	this.context.targetTemperature = val;
 	// todo: remove this, as it will be set from callback when AC updates
-	this.getService(Service.Thermostat)
+	this.getService(Service.HeaterCooler)
 		.setCharacteristic(Characteristic.CurrentTemperature, val);
 	cb();
 };
 
-Airtouch.prototype.getRotationSpeed = function(cb) {
+Airtouch.prototype.acGetRotationSpeed = function(cb) {
 	cb(null, this.context.rotationSpeed);
 }
 
-Airtouch.prototype.setRotationSpeed = function(val, cb) {
+Airtouch.prototype.acSetRotationSpeed = function(val, cb) {
 	// todo: actual control fan
 	this.context.rotationSpeed = val;
-	// todo: remove this, as it will be set from callback when AC updates
-	this.getService(Service.Thermostat)
-		.setCharacteristic(Characteristic.RotationSpeed, val);
 }
 
-Airtouch.prototype.getTemperatureDisplayUnits = function(cb) {
+Airtouch.prototype.acGetTemperatureDisplayUnits = function(cb) {
 	cb(null, this.context.temperatureDisplayUnits);
 };
 
-Airtouch.prototype.setTemperatureDisplayUnits = function(val, cb) {
+Airtouch.prototype.acSetTemperatureDisplayUnits = function(val, cb) {
 	this.context.temperatureDisplayUnits = val;
 	cb();
 };
 
-Airtouch.prototype.getName = function(cb) {
+Airtouch.prototype.acGetName = function(cb) {
 	cb(null, this.displayName);
 };
+
+Airtouch.prototype.acGetSpill = function(cb) {
+	cb(null, this.context.spill);
+}
 
