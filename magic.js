@@ -1,0 +1,10 @@
+module.exports = {
+
+	HEADER_BYTES: [0x55, 0x55],
+	ADDRESS_BYTES: [0x80, 0xb0],
+	MSGTYPE_GRP_CTRL: 0x2a,
+	MSGTYPE_GRP_STAT: 0x2b,
+	MSGTYPE_AC_CTRL: 0x2c,
+	MSGTYPE_AC_STAT: 0x2d,
+
+}
