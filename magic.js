@@ -7,4 +7,35 @@ module.exports = {
 	MSGTYPE_AC_CTRL: 0x2c,
 	MSGTYPE_AC_STAT: 0x2d,
 
+	AC_POWER_STATES: {
+		KEEP: 0,
+		NEXT: 1,
+		OFF: 2,
+		ON: 3
+	},
+	AC_MODES: {
+		AUTO: 0,
+		HEAT: 1,
+		DRY: 2,
+		FAN: 3,
+		COOL: 4,
+		KEEP: 5
+	},
+	AC_FAN_SPEEDS: {
+		AUTO: 0,
+		QUIET: 1,
+		LOW: 2,
+		MEDIUM: 3,
+		HIGH: 4,
+		POWERFUL: 5,
+		TURBO: 6,
+		KEEP: 7
+	},
+	AC_TARGET_TYPES: {
+		KEEP: 0,
+		SET_VALUE: 1,
+		DECREMENT: 2,
+		INCREMENT: 3
+	},
+
 }

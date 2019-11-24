@@ -5,11 +5,11 @@ var Accessory, Service, Characteristic, UUIDGen;
 
 module.exports = function (homebridge) {
 	Accessory = homebridge.platformAccessory;
-    Service = homebridge.hap.Service;
-    Characteristic = homebridge.hap.Characteristic;
+	Service = homebridge.hap.Service;
+	Characteristic = homebridge.hap.Characteristic;
 	UUIDGen = homebridge.hap.uuid;
 	// registerPlatform(pluginName, platformName, constructor, dynamic), dynamic must be true
-    homebridge.registerPlatform("homebridge-airtouch4-platform", "Airtouch", Airtouch, true);
+	homebridge.registerPlatform("homebridge-airtouch4-platform", "Airtouch", Airtouch, true);
 };
 
 //
@@ -47,6 +47,7 @@ Airtouch.prototype.configureAccessory = function(accessory) {
 	}
 	accessory.reacheable = false;
 	accessory.log = this.log;
+	accessory.api = this.api;
 	this.setupAC(accessory);
 	this.units[accessory.displayName] = accessory;
 	this.log("We added the new accessory here:");
@@ -58,7 +59,7 @@ Airtouch.prototype.updateACStatus = function(ac_status) {
 	ac_status.forEach(unit_status => {
 		unit_name = "AC " + unit_status.ac_unit_number;
 		this.log("Received status update for [" + unit_name + "]");
-		this.log(unit_status);
+		this.log(JSON.stringify(unit_status));
 		if (unit_name in this.units) {
 			this.log("Found accessory [" + unit_name + "], updating...");
 			unit = this.units[unit_name];
@@ -69,6 +70,7 @@ Airtouch.prototype.updateACStatus = function(ac_status) {
 			var uuid = UUIDGen.generate(unit_name);
 			var unit = new Accessory(unit_name, uuid);
 			unit.log = this.log;
+			unit.api = this.api;
 			unit.context.manufacturer = this.config.units[unit_status.ac_unit_number].manufacturer || "N/A";
 			unit.context.model = this.config.units[unit_status.ac_unit_number].model || "N/A";
 			unit.context.serial = unit_status.ac_unit_number;
@@ -171,8 +173,14 @@ Airtouch.prototype.setupAC = function(accessory) {
 
 
 Airtouch.prototype.updateAC = function(accessory, status) {
+	var thermostat = accessory.getService(Service.Thermostat);
+
 	accessory.context.currentTemperature = status.ac_temp;
+	thermostat.setCharacteristic(Characteristic.CurrentTemperature, accessory.context.currentTemperature);
+
 	accessory.context.targetTemperature = status.ac_target;
+	thermostat.setCharacteristic(Characteristic.TargetTemperature, accessory.context.targetTemperature);
+
 	accessory.context.active = status.ac_power_state;
 	if (status.ac_power_state == 0) // OFF
 		accessory.context.currentHeatingCoolingState = 0;
@@ -182,23 +190,19 @@ Airtouch.prototype.updateAC = function(accessory, status) {
 		accessory.context.currentHeatingCoolingState = 2;
 	else // AUTO set for: {2=DRY, 3=FAN, 8=AUTO-HEAT, 9=AUTO-COOL}
 		accessory.context.currentHeatingCoolingState = 3;
+	thermostat.setCharacteristic(Characteristic.CurrentHeatingCoolingState, accessory.context.currentHeatingCoolingState);
+
 	accessory.context.targetHeatingCoolingState = accessory.context.currentHeatingCoolingState;
+	thermostat.setCharacteristic(Characteristic.TargetHeatingCoolingState, accessory.context.targetHeatingCoolingState);
+
 	accessory.context.rotationSpeed = status.ac_fan_speed * accessory.context.fan_step;
+	thermostat.setCharacteristic(Characteristic.RotationSpeed, accessory.context.rotationSpeed);
+
 	accessory.context.spill = status.ac_spill;
 	accessory.context.timer = status.ac_timer_set;
 	accessory.context.error = status.ac_error_code;
 	this.log("Finished updating accessory [" + accessory.displayName + "]");
 	accessory.updateReachability(true);
-};
-
-Airtouch.prototype.acGetActive = function(cb) {
-	cb(null, this.context.active);
-};
-
-Airtouch.prototype.acSetActive = function(val, cb) {
-	// todo: actual control AC
-	this.context.active = val;
-	cb();
 };
 
 Airtouch.prototype.acGetCurrentHeatingCoolingState = function(cb) {
@@ -210,11 +214,10 @@ Airtouch.prototype.acGetTargetHeatingCoolingState = function(cb) {
 };
 
 Airtouch.prototype.acSetTargetHeatingCoolingState = function(val, cb) {
-	// todo: actual control AC
-	this.context.targetHeaterCoolierState = val;
-	// todo: remove this, as it will be set from callback when AC updates
-	this.getService(Service.Thermostat)
-		.setCharacteristic(Characteristic.CurrentHeatingCoolingState, val);
+	this.context.targetHeatingCoolingState = val;
+	if (this.context.currentHeatingCoolingState != val) {
+		this.api.acSetCurrentHeatingCoolingState(this.context.serial, val, this.context.targetTemperature);
+	}
 	cb();
 };
 
@@ -223,17 +226,16 @@ Airtouch.prototype.acGetCurrentTemperature = function(cb) {
 };
 
 Airtouch.prototype.acGetTargetTemperature = function(cb) {
+	if (typeof(this.context.targetTemperature) === "undefined")
+        this.context.targetTemperature = this.context.currentTemperature;
 	cb(null, this.context.targetTemperature);
 };
 
 Airtouch.prototype.acSetTargetTemperature = function(val, cb) {
-	// todo: actual control AC
-	this.context.targetTemperature = val;
-	// todo: remove this, as it will be set from callback when AC updates
-	this.getService(Service.Thermostat)
-		.setCharacteristic(Characteristic.CurrentTemperature,
-			this.getService(Service.Thermostat).getCharacteristic(Characteristic.CurrentTemperature)
-		);
+	if (this.context.targetTemperature != val) {
+		this.context.targetTemperature = val;
+		this.api.acSetTargetTemperature(this.context.serial, val);
+	}
 	cb();
 };
 
