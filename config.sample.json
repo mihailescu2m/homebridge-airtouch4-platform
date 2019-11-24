@@ -1,0 +1,19 @@
+"platforms": [
+	{
+		"platform": "Airtouch",
+		"name": "Airtouch",
+		"units": [
+			{
+				"manufacturer": "LG",
+				"model": "B36AWY-7G6",
+				"fan": {
+					"0": "AUTO",
+					"1": "QUIET",
+					"2": "LOW",
+					"3": "MEDIUM"
+				}
+			}
+		]
+	}
+]
+
