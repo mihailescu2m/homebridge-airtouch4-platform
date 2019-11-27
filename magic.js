@@ -1,10 +1,15 @@
 module.exports = {
 
 	HEADER_BYTES: [0x55, 0x55],
+
 	ADDRESS_BYTES: [0x80, 0xb0],
+
 	MSGTYPE_GRP_CTRL: 0x2a,
+
 	MSGTYPE_GRP_STAT: 0x2b,
+
 	MSGTYPE_AC_CTRL: 0x2c,
+
 	MSGTYPE_AC_STAT: 0x2d,
 
 	AC_POWER_STATES: {
@@ -13,6 +18,7 @@ module.exports = {
 		OFF: 2,
 		ON: 3
 	},
+
 	AC_MODES: {
 		AUTO: 0,
 		HEAT: 1,
@@ -21,6 +27,7 @@ module.exports = {
 		COOL: 4,
 		KEEP: 5
 	},
+
 	AC_FAN_SPEEDS: {
 		AUTO: 0,
 		QUIET: 1,
@@ -31,6 +38,7 @@ module.exports = {
 		TURBO: 6,
 		KEEP: 7
 	},
+
 	AC_TARGET_TYPES: {
 		KEEP: 0,
 		SET_VALUE: 1,

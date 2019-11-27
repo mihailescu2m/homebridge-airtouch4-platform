@@ -15,7 +15,7 @@ module.exports = function (homebridge) {
 //
 // Airtouch platform
 // Homebridge platform which creates accessories for AC units and AC zones
-// Handles communication with the Airtouch Touchpad using the Airtouch API
+// Handles communication with the Airtouch Touchpad Controller using the Airtouch API
 //
 function Airtouch(log, config, api) {
 	this.log = log;
@@ -28,70 +28,67 @@ function Airtouch(log, config, api) {
 	util.inherits(AirtouchAPI, emitter);
 	this.api = new AirtouchAPI(log);
 	this.api.on("ac_status", (ac_status) => {
-		this.updateACStatus(ac_status);
+		this.onACStatusNotification(ac_status);
 	});
 	//this.api.on("group_status", (group_status) => {
-	//	this.updateGroupStatus(group_status);
+	//	this.onGroupStatusNotification(group_status);
 	//});
 
-	this.api.connect(); //config.address || "192.168.0.52");
+	this.api.connect(config.ip_address || "192.168.0.52");
 };
 
+// configures cached accessories
 Airtouch.prototype.configureAccessory = function(accessory) {
 	this.log("Trying to configure [" + accessory.displayName + "] from cache...");
-	this.log("But we already have these units:");
-	this.log(this.units);
-	if (accessory.displayName in this.units) {
+	if (accessory.displayName in this.units || accessory.displayName in this.zones) {
 		this.log("[" + accessory.displayName + "] is already configured");
 		return;
 	}
 	accessory.reacheable = false;
 	accessory.log = this.log;
 	accessory.api = this.api;
-	this.setupAC(accessory);
+	// TODO: logic to detect if accessory is AC or Group
+	this.setupACAccessory(accessory);
 	this.units[accessory.displayName] = accessory;
-	this.log("We added the new accessory here:");
-	this.log(this.units);
+
 	this.log("[" + accessory.displayName + "] was restored from cache and should be reachable");
 };
 
-Airtouch.prototype.updateACStatus = function(ac_status) {
+// callback for messages received from Airtouch Touchpad Controller
+Airtouch.prototype.onACStatusNotification = function(ac_status) {
 	ac_status.forEach(unit_status => {
 		unit_name = "AC " + unit_status.ac_unit_number;
-		this.log("Received status update for [" + unit_name + "]");
-		this.log(JSON.stringify(unit_status));
-		if (unit_name in this.units) {
-			this.log("Found accessory [" + unit_name + "], updating...");
-			unit = this.units[unit_name];
-			this.updateAC(unit, unit_status);
-		} else {
-			this.log("[" + unit_name + "] was not found, creating new AirtouchUnit accessory...");
-			this.log(this.units);
-			var uuid = UUIDGen.generate(unit_name);
-			var unit = new Accessory(unit_name, uuid);
+		this.log("Received status update for [" + unit_name + "]: " + JSON.stringify(unit_status));
+		// check if accessory exists
+		if (!(unit_name in this.units)) {
+			this.log("[" + unit_name + "] was not found, creating as new AC accessory...");
+			let uuid = UUIDGen.generate(unit_name);
+			let unit = new Accessory(unit_name, uuid);
 			unit.log = this.log;
 			unit.api = this.api;
 			unit.context.manufacturer = this.config.units[unit_status.ac_unit_number].manufacturer || "N/A";
 			unit.context.model = this.config.units[unit_status.ac_unit_number].model || "N/A";
 			unit.context.serial = unit_status.ac_unit_number;
-			this.setupAC(unit);
+			this.setupACAccessory(unit);
 			this.units[unit_name] = unit;
 			this.platform.registerPlatformAccessories("homebridge-airtouch4-platform", "Airtouch", [unit]);
-			this.updateAC(unit, unit_status);
 		}
+		// update accessory
+		this.updateACAccessory(this.units[unit_name], unit_status);
 	});
 };
 
-Airtouch.prototype.setupAC = function(accessory) {
+// setup AC accessory callbacks
+Airtouch.prototype.setupACAccessory = function(accessory) {
 	accessory.on('identify', (paired, cb) => {
-		this.log(accessory.displayName, " identified");
+		this.log(accessory.displayName, " is here");
 		cb();
 	});
 	accessory.getService(Service.AccessoryInformation)
 		.setCharacteristic(Characteristic.Manufacturer, accessory.context.manufacturer)
 		.setCharacteristic(Characteristic.Model, accessory.context.model)
 		.setCharacteristic(Characteristic.SerialNumber, accessory.context.serial.toString());
-	var thermostat = accessory.getService(Service.Thermostat);
+	let thermostat = accessory.getService(Service.Thermostat);
 	if (thermostat === undefined)
 		thermostat = accessory.addService(Service.Thermostat, accessory.displayName);
 	//thermostat
@@ -110,22 +107,25 @@ Airtouch.prototype.setupAC = function(accessory) {
 		.on("get", this.acGetCurrentTemperature.bind(accessory));
     thermostat
         .getCharacteristic(Characteristic.TargetTemperature)
+		.setProps({
+			minStep: 1.0,
+			minValue: 16.0,
+			maxValue: 30.0})
         .on("get", this.acGetTargetTemperature.bind(accessory))
 		.on("set", this.acSetTargetTemperature.bind(accessory));
 	//thermostat
 	//	.getCharacteristic(Characteristic.HeatingThresholdTemperature)
 	//	.on("get", this.acGetTargetTemperature.bind(accessory))
 	//	.on("set", this.acSetTargetTemperature.bind(accessory));
-	var fan_speeds = this.config.units[accessory.context.serial].fan;
+	let fan_speeds = this.config.units[accessory.context.serial].fan;
 	accessory.context.fan_step = Math.floor(100/(Object.keys(fan_speeds).length-1));
-	var fan = thermostat.getCharacteristic(Characteristic.RotationSpeed);
+	let fan = thermostat.getCharacteristic(Characteristic.RotationSpeed);
 	if (fan === undefined)
 		fan = thermostat.addCharacteristic(Characteristic.RotationSpeed);
 	fan.setProps({
 			minStep: accessory.context.fan_step,
 			minValue: 0,
-			maxValue: accessory.context.fan_step*(Object.keys(fan_speeds).length-1)
-		})
+			maxValue: accessory.context.fan_step*(Object.keys(fan_speeds).length-1)})
 		.on("get", this.acGetRotationSpeed.bind(accessory))
 		.on("set", this.acSetRotationSpeed.bind(accessory));
     thermostat
@@ -143,37 +143,18 @@ Airtouch.prototype.setupAC = function(accessory) {
 	//	.setCharacteristic(Characteristic.Name, "Spill")
 	//	.getCharacteristic(Characteristic.On)
 	//	.setProps({
-	//		perms: ["pr", "ev"]
-	//	})
+	//		perms: ["pr", "ev"]})
 	//	.on("get", this.acGetSpill.bind(accessory));
-		//.on("get", this.getRotationSpeed.bind(accessory));
+	//	.on("get", this.getRotationSpeed.bind(accessory));
 
-
-	//var fan_speeds = this.config.units[accessory.context.serial].fan;
-	//accessory.context.fan_step = Math.floor(100/(Object.keys(fan_speeds).length-1));
-	//var fan = thermostat.getCharacteristic(Characteristic.RotationSpeed);
-	//var fan = accessory.getService(Service.Fan);
-	//if (fan === undefined)
-		//fan = accessory.addService(Service.Fan, accessory.displayName);
-	//	fan = thermostat.addCharacteristic(Characteristic.RotationSpeed);
-	//fan
-	//	.setCharacteristic(Characteristic.Active, 1)
-	//	.getCharacteristic(Characteristic.RotationSpeed)
-	//	.setProps({
-	//		minStep: accessory.context.fan_step,
-	//		minValue: 0,
-	//		maxValue: accessory.context.fan_step*(Object.keys(fan_speeds).length-1)
-	//	})
-	//	.on("get", this.getRotationSpeed.bind(accessory))
-	//	.on("set", this.setRotationSpeed.bind(accessory));
-	//thermostat.isPrimaryService = true;
-	accessory.context.temperatureDisplayUnits = 0;
+	thermostat.isPrimaryService = true;
+	accessory.context.temperatureDisplayUnits = 0; // Celsius
 	this.log("Finished creating accessory [" + accessory.displayName + "]");
 };
 
-
-Airtouch.prototype.updateAC = function(accessory, status) {
-	var thermostat = accessory.getService(Service.Thermostat);
+// update AC accessory data
+Airtouch.prototype.updateACAccessory = function(accessory, status) {
+	let thermostat = accessory.getService(Service.Thermostat);
 
 	accessory.context.currentTemperature = status.ac_temp;
 	thermostat.setCharacteristic(Characteristic.CurrentTemperature, accessory.context.currentTemperature);
@@ -205,6 +186,7 @@ Airtouch.prototype.updateAC = function(accessory, status) {
 	accessory.updateReachability(true);
 };
 
+/* AC accessory callbacks */
 Airtouch.prototype.acGetCurrentHeatingCoolingState = function(cb) {
 	cb(null, this.context.currentHeatingCoolingState);
 };
@@ -244,7 +226,7 @@ Airtouch.prototype.acGetRotationSpeed = function(cb) {
 }
 
 Airtouch.prototype.acSetRotationSpeed = function(val, cb) {
-	// todo: actual control fan
+	// TODO: actual control fan
 	this.context.rotationSpeed = val;
 }
 
@@ -264,4 +246,6 @@ Airtouch.prototype.acGetName = function(cb) {
 Airtouch.prototype.acGetSpill = function(cb) {
 	cb(null, this.context.spill);
 }
+
+/* / AC accessory callbacks */
 
