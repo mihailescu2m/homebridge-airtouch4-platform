@@ -71,7 +71,7 @@ AirtouchAPI.prototype.encode_ac_control = function(unit) {
 	return Buffer.from([byte1, byte2, byte3, byte4]);
 };
 
-// send AC command to change AC mode (OFF/HEATING/COOLING/AUTO)
+// send command to change AC mode (OFF/HEATING/COOLING/AUTO)
 AirtouchAPI.prototype.acSetCurrentHeatingCoolingState = function(unit_number, state, temp) {
 	unit_number = unit_number || 0;
 	state = state || {};
@@ -113,7 +113,7 @@ AirtouchAPI.prototype.acSetCurrentHeatingCoolingState = function(unit_number, st
 	this.send(MAGIC.MSGTYPE_AC_CTRL, data);
 };
 
-// send AC message to change AC target temperature
+// send command to change AC target temperature
 AirtouchAPI.prototype.acSetTargetTemperature = function(unit_number, temp) {
 	unit_number = unit_number || 0;
 	temp = Math.round(temp) || 0;
@@ -126,7 +126,20 @@ AirtouchAPI.prototype.acSetTargetTemperature = function(unit_number, temp) {
 	this.send(MAGIC.MSGTYPE_AC_CTRL, data);
 };
 
-// send AC message to get AC status
+// send command to change AC fan speed 
+AirtouchAPI.prototype.acSetFanSpeed = function(unit_number, speed) {
+	unit_number = unit_number || 0;
+	speed = Math.round(temp) || 0;
+	target = {
+		ac_unit_number: unit_number,
+		ac_fan_speed: speed
+	};
+	this.log("API | Setting fan speed " + JSON.stringify(target));
+	let data = this.encode_ac_control(target);
+	this.send(MAGIC.MSGTYPE_AC_CTRL, data);
+};
+
+// send command to get AC status
 AirtouchAPI.prototype.GET_AC_STATUS = function() {
 	// due to a bug, cannot send empty data
 	// so we send one byte of data
@@ -165,6 +178,47 @@ AirtouchAPI.prototype.decode_ac_status = function(data) {
 	this.emit("ac_status", ac_status);
 };
 
+// send command to get group status
+AirtouchAPI.prototype.GET_GROUP_STATUS = function() {
+	// due to a bug, cannot send empty data
+	// so we send one byte of data
+	let data = Buffer.alloc(1);
+	data.writeUInt8(1, 0);
+	this.send(MAGIC.MSGTYPE_GROUP_STAT, data);
+};
+
+// decode group status information and send it to homebridge
+AirtouchAPI.prototype.decode_group_status = function(data) {
+	data = data || {};
+	group_status = [];
+	for (i = 0; i < data.length/6; i++) {
+		let group = data.slice(i*6, i*6+6);
+		group_power_state = (group[0] & 0b11000000) >> 6;
+		group_number = group[0] & 0b00111111;
+		group_control_type = (group[1] & 0b10000000) >> 7;
+		group_open_perc = group[1] & 0b01111111;
+		group_battery_low = (group[2] & 0b10000000) >> 7;
+		group_has_turbo = (group[2] & 0b01000000) >> 6;
+		group_target = (group[2] & 0b00111111) * 1.0;
+		group_has_sensor = (group[3] & 0b10000000) >> 7;
+		group_temp = (((group[4] << 3) + ((group[5] & 0b11100000) >> 5)) - 500) / 10;
+		group_has_spill = (group[5] & 0b00010000) >> 4;
+		group_status.push({
+			group_number: group_number,
+			group_power_state: group_power_state,
+			group_control_type: group_control_type,
+			group_damper_state: group_open_perc,
+			group_target: group_target,
+			group_temp: group_temp,
+			group_battery_low: group_battery_low,
+			group_has_turbo: group_has_turbo,
+			group_has_sensor: group_has_sensor,
+			group_has_spill: group_has_spill,
+		});
+	}
+	this.emit("group_status", group_status);
+};		
+
 // connect to Airtouch Touchpad Controller socket on tcp port 9004
 AirtouchAPI.prototype.connect = function(address) {
 	this.device = new net.Socket();
@@ -172,7 +226,7 @@ AirtouchAPI.prototype.connect = function(address) {
 		this.log("API | Connected to Airtouch");
 		// request information from Airtouch after connection
 		this.GET_AC_STATUS();
-		//this.GET_GROUP_STATUS();
+		this.GET_GROUP_STATUS();
 	});
 	this.device.on("close", () => {
 		this.log("API | Disconnected from Airtouch");

@@ -1,5 +1,6 @@
 const util = require("util");
 const emitter = require("events").EventEmitter;
+const MAGIC = require("./magic");
 const AirtouchAPI = require("./api");
 var Accessory, Service, Characteristic, UUIDGen;
 
@@ -117,15 +118,15 @@ Airtouch.prototype.setupACAccessory = function(accessory) {
 	//	.getCharacteristic(Characteristic.HeatingThresholdTemperature)
 	//	.on("get", this.acGetTargetTemperature.bind(accessory))
 	//	.on("set", this.acSetTargetTemperature.bind(accessory));
-	let fan_speeds = this.config.units[accessory.context.serial].fan;
-	accessory.context.fan_step = Math.floor(100/(Object.keys(fan_speeds).length-1));
+	accessory.context.fan_speeds = this.config.units[accessory.context.serial].fan;
+	accessory.context.rotation_step = Math.floor(100/(Object.keys(accessory.context.fan_speeds).length-1));
 	let fan = thermostat.getCharacteristic(Characteristic.RotationSpeed);
 	if (fan === undefined)
 		fan = thermostat.addCharacteristic(Characteristic.RotationSpeed);
 	fan.setProps({
 			minStep: accessory.context.fan_step,
 			minValue: 0,
-			maxValue: accessory.context.fan_step*(Object.keys(fan_speeds).length-1)})
+			maxValue: accessory.context.rotation_step*(Object.keys(accessory.context.fan_speeds).length-1)})
 		.on("get", this.acGetRotationSpeed.bind(accessory))
 		.on("set", this.acSetRotationSpeed.bind(accessory));
     thermostat
@@ -176,7 +177,10 @@ Airtouch.prototype.updateACAccessory = function(accessory, status) {
 	accessory.context.targetHeatingCoolingState = accessory.context.currentHeatingCoolingState;
 	thermostat.setCharacteristic(Characteristic.TargetHeatingCoolingState, accessory.context.targetHeatingCoolingState);
 
-	accessory.context.rotationSpeed = status.ac_fan_speed * accessory.context.fan_step;
+	// convert AC fan speed number in AC fan speed string (e.g. 4 => High)
+	let fan_speed = Object.keys(MAGIC.AC_FAN_SPEEDS).find(key => MAGIC.AC_FAN_SPEEDS[key] === status.ac_fan_speed);
+	// convert AC fan speed string into homebridge fan rotation % (e.g. High => 99%) using the config array
+	accessory.context.rotationSpeed = accessory.context.fan_speeds.indexOf(fan_speed) * accessory.context.fan_step;
 	thermostat.setCharacteristic(Characteristic.RotationSpeed, accessory.context.rotationSpeed);
 
 	accessory.context.spill = status.ac_spill;
@@ -226,8 +230,14 @@ Airtouch.prototype.acGetRotationSpeed = function(cb) {
 }
 
 Airtouch.prototype.acSetRotationSpeed = function(val, cb) {
-	// TODO: actual control fan
-	this.context.rotationSpeed = val;
+	if (this.context.rotationSpeed != val) {
+		this.context.rotationSpeed = val;
+		// convert homebridge fan rotation % into AC fan speed string (e.g. 99% => High) using the config array
+		let fan_speed = accessory.context.fan_speeds[val / accessoru.context.fan_step];
+		// convert AC fan speed string in AC fan speed number (e.g. High => 4) and update AC
+		this.api.acSetFanSpeed(this.context.serial, MAGIC.AC_FAN_SPEEDS[fan_speed]);
+	}
+	cb();
 }
 
 Airtouch.prototype.acGetTemperatureDisplayUnits = function(cb) {
