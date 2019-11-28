@@ -38,11 +38,12 @@ function isNull(val, nullVal) {
 
 // send message to the Airtouch Touchpad Controller
 AirtouchAPI.prototype.send = function(type, data) {
-	this.log("API | Sending message type " + type.toString(16) + " containing:");
+	let id = Math.floor(Math.random() * Math.floor(255)) + 1;
+	this.log("API | Sending message " + id + " with type " + type.toString(16) + " containing:");
 	this.log(data);
 	// generate a random message id
 	let msgid = Buffer.alloc(1);
-	msgid.writeUInt8(Math.floor(Math.random() * Math.floor(255)) + 1);
+	msgid.writeUInt8(id);
 	// get data length
 	let datalen = Buffer.alloc(2);
 	datalen.writeUInt16BE(data.length);
@@ -74,7 +75,7 @@ AirtouchAPI.prototype.encode_ac_control = function(unit) {
 // send command to change AC mode (OFF/HEATING/COOLING/AUTO)
 AirtouchAPI.prototype.acSetCurrentHeatingCoolingState = function(unit_number, state, temp) {
 	unit_number = unit_number || 0;
-	state = state || {};
+	state = state || 0;
 	temp = Math.round(temp) || 0;
 	switch (state) {
 		case 0: // OFF
@@ -127,12 +128,14 @@ AirtouchAPI.prototype.acSetTargetTemperature = function(unit_number, temp) {
 };
 
 // send command to change AC fan speed 
-AirtouchAPI.prototype.acSetFanSpeed = function(unit_number, speed) {
+AirtouchAPI.prototype.acSetFanSpeed = function(unit_number, speed, temp) {
 	unit_number = unit_number || 0;
-	speed = Math.round(temp) || 0;
+	speed = Math.round(speed) || 0;
+	temp = Math.round(temp) || 0;
 	target = {
 		ac_unit_number: unit_number,
-		ac_fan_speed: speed
+		ac_fan_speed: speed,
+		ac_target_value: temp
 	};
 	this.log("API | Setting fan speed " + JSON.stringify(target));
 	let data = this.encode_ac_control(target);
