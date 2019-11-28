@@ -62,27 +62,23 @@ AirtouchAPI.prototype.send = function(type, data) {
 
 // encode a message for AC command
 AirtouchAPI.prototype.encode_ac_control = function(unit) {
-	let byte1 = isNull(unit.ac_unit_number,0);
+	let byte1 = isNull(unit.ac_unit_number, MAGIC.AC_UNIT_DEFAULT);
 	byte1 = byte1 | ((isNull(unit.ac_power_state, MAGIC.AC_POWER_STATES.KEEP)) << 6);
 	let byte2 = isNull(unit.ac_fan_speed, MAGIC.AC_FAN_SPEEDS.KEEP);
 	byte2 = byte2 | ((isNull(unit.ac_mode, MAGIC.AC_MODES.KEEP)) << 4);
-	let byte3 = isNull(unit.ac_target_value, 0);
+	let byte3 = isNull(unit.ac_target_value, MAGIC.AC_TARGET_KEEP);
 	byte3 = byte3 | ((isNull(unit.ac_target_type, MAGIC.AC_TARGET_TYPES.KEEP)) << 6);
 	let byte4 = 0;
 	return Buffer.from([byte1, byte2, byte3, byte4]);
 };
 
 // send command to change AC mode (OFF/HEATING/COOLING/AUTO)
-AirtouchAPI.prototype.acSetCurrentHeatingCoolingState = function(unit_number, state, temp) {
-	unit_number = unit_number || 0;
-	state = state || 0;
-	temp = Math.round(temp) || 0;
+AirtouchAPI.prototype.acSetCurrentHeatingCoolingState = function(unit_number, state) {
 	switch (state) {
 		case 0: // OFF
 			target = {
 				ac_unit_number: unit_number,
 				ac_power_state: MAGIC.AC_POWER_STATES.OFF,
-				ac_target_value: temp
 			};
 			break;
 		case 1: // HEAT
@@ -90,7 +86,6 @@ AirtouchAPI.prototype.acSetCurrentHeatingCoolingState = function(unit_number, st
 				ac_unit_number: unit_number,
 				ac_power_state: MAGIC.AC_POWER_STATES.ON,
 				ac_mode: MAGIC.AC_MODES.HEAT,
-				ac_target_value: temp
 			};
 			break;
 		case 2: // COOL
@@ -98,7 +93,6 @@ AirtouchAPI.prototype.acSetCurrentHeatingCoolingState = function(unit_number, st
 				ac_unit_number: unit_number,
 				ac_power_state: MAGIC.AC_POWER_STATES.ON,
 				ac_mode: MAGIC.AC_MODES.COOL,
-				ac_target_value: temp
 			};
 			break;
 		default: // everything else is AUTO
@@ -106,7 +100,6 @@ AirtouchAPI.prototype.acSetCurrentHeatingCoolingState = function(unit_number, st
 				ac_unit_number: unit_number,
 				ac_power_state: MAGIC.AC_POWER_STATES.ON,
 				ac_mode: MAGIC.AC_MODES.AUTO,
-				ac_target_value: temp
 			};
 	}
 	this.log("API | Setting heating/cooling state to: " + JSON.stringify(target));
@@ -116,11 +109,9 @@ AirtouchAPI.prototype.acSetCurrentHeatingCoolingState = function(unit_number, st
 
 // send command to change AC target temperature
 AirtouchAPI.prototype.acSetTargetTemperature = function(unit_number, temp) {
-	unit_number = unit_number || 0;
-	temp = Math.round(temp) || 0;
 	target = {
 		ac_unit_number: unit_number,
-		ac_target_value: temp
+		ac_target_value: temp,
 	};
 	this.log("API | Setting target temperature " + JSON.stringify(target));
 	let data = this.encode_ac_control(target);
@@ -128,14 +119,10 @@ AirtouchAPI.prototype.acSetTargetTemperature = function(unit_number, temp) {
 };
 
 // send command to change AC fan speed 
-AirtouchAPI.prototype.acSetFanSpeed = function(unit_number, speed, temp) {
-	unit_number = unit_number || 0;
-	speed = Math.round(speed) || 0;
-	temp = Math.round(temp) || 0;
+AirtouchAPI.prototype.acSetFanSpeed = function(unit_number, speed) {
 	target = {
 		ac_unit_number: unit_number,
 		ac_fan_speed: speed,
-		ac_target_value: temp
 	};
 	this.log("API | Setting fan speed " + JSON.stringify(target));
 	let data = this.encode_ac_control(target);
@@ -153,7 +140,6 @@ AirtouchAPI.prototype.GET_AC_STATUS = function() {
 
 // decode AC status information and send it to homebridge
 AirtouchAPI.prototype.decode_ac_status = function(data) {
-	data = data || {};
 	ac_status = [];
 	for (i = 0; i < data.length/8; i++) {
 		let unit = data.slice(i*8, i*8+8);
@@ -212,7 +198,6 @@ AirtouchAPI.prototype.GET_GROUP_STATUS = function() {
 
 // decode groups status information and send it to homebridge
 AirtouchAPI.prototype.decode_groups_status = function(data) {
-	data = data || {};
 	groups_status = [];
 	for (i = 0; i < data.length/6; i++) {
 		let group = data.slice(i*6, i*6+6);

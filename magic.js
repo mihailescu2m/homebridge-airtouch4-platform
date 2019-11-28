@@ -46,4 +46,7 @@ module.exports = {
 		INCREMENT: 3
 	},
 
+	AC_UNIT_DEFAULT: 0,
+
+	AC_TARGET_KEEP: 63,
 }

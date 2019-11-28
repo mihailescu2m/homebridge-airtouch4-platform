@@ -327,7 +327,7 @@ Airtouch.prototype.acSetTargetHeatingCoolingState = function(val, cb) {
 	if (this.context.targetHeatingCoolingState != val) {
 		this.context.targetHeatingCoolingState = val;
 		if (this.context.currentHeatingCoolingState != val)
-			this.api.acSetCurrentHeatingCoolingState(this.context.serial, val, this.context.targetTemperature);
+			this.api.acSetCurrentHeatingCoolingState(this.context.serial, val);
 	}
 	cb();
 };
@@ -347,7 +347,7 @@ Airtouch.prototype.acSetRotationSpeed = function(val, cb) {
 		// convert homebridge fan rotation % into AC fan speed string (e.g. 99% => High) using the config array
 		let fan_speed = this.context.fan_speeds[val / this.context.rotation_step];
 		// convert AC fan speed string in AC fan speed number (e.g. High => 4) and update AC
-		this.api.acSetFanSpeed(this.context.serial, MAGIC.AC_FAN_SPEEDS[fan_speed], this.context.targetTemperature);
+		this.api.acSetFanSpeed(this.context.serial, MAGIC.AC_FAN_SPEEDS[fan_speed]);
 	}
 	cb();
 };
