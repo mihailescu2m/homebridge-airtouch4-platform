@@ -53,7 +53,7 @@ AirtouchAPI.prototype.send = function(type, data) {
 	crc.writeUInt16BE(crc16(payload));
 	// assemble message
 	let message = Buffer.from([...MAGIC.HEADER_BYTES, ...payload,  ...crc]);
-	this.log("API | essage to send:");
+	this.log("API | Message to send:");
 	this.log(message);
 	// send message
 	this.device.write(message);
@@ -178,19 +178,39 @@ AirtouchAPI.prototype.decode_ac_status = function(data) {
 	this.emit("ac_status", ac_status);
 };
 
+// send command to change zone power state (ON/OFF)
+AirtouchAPI.prototype.zoneSetActive = function(group_number, active) {
+	target = {
+		group_number: group_number,
+		group_power_state: active
+	};
+	this.log("API | Setting zone state: " + JSON.stringify(target));
+	this.log("**********************************");
+};
+
+// send command to set damper position
+AirtouchAPI.prototype.zoneSetDamperPosition = function(group_number, position) {
+	target = {
+		group_number: group_number,
+		value: position
+	};
+	this.log("API | Setting damper position: " + JSON.stringify(target));
+	this.log("**********************************");
+};
+
 // send command to get group status
 AirtouchAPI.prototype.GET_GROUP_STATUS = function() {
 	// due to a bug, cannot send empty data
 	// so we send one byte of data
 	let data = Buffer.alloc(1);
 	data.writeUInt8(1, 0);
-	this.send(MAGIC.MSGTYPE_GROUP_STAT, data);
+	this.send(MAGIC.MSGTYPE_GRP_STAT, data);
 };
 
-// decode group status information and send it to homebridge
-AirtouchAPI.prototype.decode_group_status = function(data) {
+// decode groups status information and send it to homebridge
+AirtouchAPI.prototype.decode_groups_status = function(data) {
 	data = data || {};
-	group_status = [];
+	groups_status = [];
 	for (i = 0; i < data.length/6; i++) {
 		let group = data.slice(i*6, i*6+6);
 		group_power_state = (group[0] & 0b11000000) >> 6;
@@ -203,11 +223,11 @@ AirtouchAPI.prototype.decode_group_status = function(data) {
 		group_has_sensor = (group[3] & 0b10000000) >> 7;
 		group_temp = (((group[4] << 3) + ((group[5] & 0b11100000) >> 5)) - 500) / 10;
 		group_has_spill = (group[5] & 0b00010000) >> 4;
-		group_status.push({
+		groups_status.push({
 			group_number: group_number,
 			group_power_state: group_power_state,
 			group_control_type: group_control_type,
-			group_damper_state: group_open_perc,
+			group_damper_position: group_open_perc,
 			group_target: group_target,
 			group_temp: group_temp,
 			group_battery_low: group_battery_low,
@@ -216,7 +236,7 @@ AirtouchAPI.prototype.decode_group_status = function(data) {
 			group_has_spill: group_has_spill,
 		});
 	}
-	this.emit("group_status", group_status);
+	this.emit("groups_status", groups_status);
 };		
 
 // connect to Airtouch Touchpad Controller socket on tcp port 9004
@@ -253,8 +273,8 @@ AirtouchAPI.prototype.connect = function(address) {
 		}
 		switch (msgtype) {
 			case MAGIC.MSGTYPE_GRP_STAT:
-				// decode group status info
-				this.decode_group_status(data);
+				// decode groups status info
+				this.decode_groups_status(data);
 				break;
 			case MAGIC.MSGTYPE_AC_STAT:
 				// decode ac status info
