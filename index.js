@@ -3,12 +3,36 @@ const emitter = require("events").EventEmitter;
 const MAGIC = require("./magic");
 const AirtouchAPI = require("./api");
 var Accessory, Service, Characteristic, UUIDGen;
+var CustomCharacteristic = {};
 
 module.exports = function (homebridge) {
 	Accessory = homebridge.platformAccessory;
 	Service = homebridge.hap.Service;
 	Characteristic = homebridge.hap.Characteristic;
 	UUIDGen = homebridge.hap.uuid;
+
+	CustomCharacteristic.SpillStatus = function() {
+		Characteristic.call(this, "Spill Active", CustomCharacteristic.SpillStatus.UUID);
+		this.setProps({
+			format: Characteristic.Formats.BOOL,
+			perms: [Characteristic.Perms.READ, Characteristic.Perms.NOTIFY],
+		});
+		this.value = this.getDefaultValue();
+	};
+	CustomCharacteristic.SpillStatus.UUID = "154c4ebb-a16f-488b-8968-2e5bbe15809d";
+	util.inherits(CustomCharacteristic.SpillStatus, Characteristic);
+
+	CustomCharacteristic.TimerStatus = function() {
+		Characteristic.call(this, "Timer Set", CustomCharacteristic.TimerStatus.UUID);
+		this.setProps({
+			format: Characteristic.Formats.BOOL,
+			perms: [Characteristic.Perms.READ, Characteristic.Perms.NOTIFY],
+		});
+		this.value = this.getDefaultValue();
+	};
+	CustomCharacteristic.TimerStatus.UUID = "2f9bfcd0-00ff-481a-873c-188a2e93d316";
+	util.inherits(CustomCharacteristic.TimerStatus, Characteristic);
+
 	// registerPlatform(pluginName, platformName, constructor, dynamic), dynamic must be true
 	homebridge.registerPlatform("homebridge-airtouch4-platform", "Airtouch", Airtouch, true);
 };
@@ -155,11 +179,21 @@ Airtouch.prototype.setupACAccessory = function(accessory) {
 	//	.on("get", this.acGetTargetTemperature.bind(accessory))
 	//	.on("set", this.acSetTargetTemperature.bind(accessory));
 
+	accessory.context.temperatureDisplayUnits = 0; // Celsius
+	thermostat
+		.getCharacteristic(Characteristic.TemperatureDisplayUnits)
+		.on("get", function(cb){ return cb(null, this.context.temperatureDisplayUnits); }.bind(accessory))
+		.on("set", this.acSetTemperatureDisplayUnits.bind(accessory));
+
+	thermostat
+		.getCharacteristic(Characteristic.Name)
+		.on("get", function(cb){ return cb(null, this.displayName); }.bind(accessory));
+
+	accessory.context.fan_speeds = this.config.units[accessory.context.serial].fan;
+	accessory.context.rotation_step = Math.floor(100/(Object.keys(accessory.context.fan_speeds).length-1));
 	let fan = thermostat.getCharacteristic(Characteristic.RotationSpeed);
 	if (fan === undefined)
 		fan = thermostat.addCharacteristic(Characteristic.RotationSpeed);
-	accessory.context.fan_speeds = this.config.units[accessory.context.serial].fan;
-	accessory.context.rotation_step = Math.floor(100/(Object.keys(accessory.context.fan_speeds).length-1));
 	fan.setProps({
 			minStep: accessory.context.rotation_step,
 			minValue: 0,
@@ -167,18 +201,25 @@ Airtouch.prototype.setupACAccessory = function(accessory) {
 		.on("get", function(cb){ return cb(null, this.context.rotationSpeed); }.bind(accessory))
 		.on("set", this.acSetRotationSpeed.bind(accessory));
 
-	accessory.context.temperatureDisplayUnits = 0; // Celsius
-	thermostat
-        .getCharacteristic(Characteristic.TemperatureDisplayUnits)
-		.on("get", function(cb){ return cb(null, this.context.temperatureDisplayUnits); }.bind(accessory))
-        .on("set", this.acSetTemperatureDisplayUnits.bind(accessory));
+	let statusFault = thermostat.getCharacteristic(Characteristic.StatusFault);
+	if (statusFault === undefined)
+		statusFault = thermostat.addCharacteristic(Characteristic.StatusFault);
+	statusFault
+		.on("get", function(cb){ return cb(null, this.context.statusFault); }.bind(accessory));
 
-	thermostat
-        .getCharacteristic(Characteristic.Name)
-		.on("get", function(cb){ return cb(null, this.displayName); }.bind(accessory));
+	let spillStatus = thermostat.getCharacteristic(CustomCharacteristic.SpillStatus);
+	if (spillStatus === undefined)
+		spillStatus = thermostat.addCharacteristic(Characteristic.SpillStatus);
+	spillStatus
+		.on("get", function(cb){ return cb(null, this.context.spillStatus); }.bind(accessory));
+
+	let timerStatus = thermostat.getCharacteristic(CustomCharacteristic.TimerStatus);
+	if (timerStatus === undefined)
+		timerStatus = thermostat.addCharacteristic(Characteristic.TimerStatus);
+	timerStatus
+		.on("get", function(cb){ return cb(null, this.context.timerStatus); }.bind(accessory));
 
 	thermostat.isPrimaryService = true;
-
 	this.log("Finished creating accessory [" + accessory.displayName + "]");
 };
 
@@ -211,8 +252,16 @@ Airtouch.prototype.updateACAccessory = function(accessory, status) {
 	let fan_speed = Object.keys(MAGIC.AC_FAN_SPEEDS).find(key => MAGIC.AC_FAN_SPEEDS[key] === status.ac_fan_speed);
 	// convert AC fan speed string into homebridge fan rotation % (e.g. High => 99%) using the config array
 	accessory.context.rotationSpeed = accessory.context.fan_speeds.indexOf(fan_speed) * accessory.context.rotation_step;
-	this.log("*** DECODED ROTATION SPEED: " + accessory.context.rotationSpeed);
 	thermostat.setCharacteristic(Characteristic.RotationSpeed, accessory.context.rotationSpeed);
+
+	accessory.context.statusFault = status.ac_error_code;
+	thermostat.setCharacteristic(Characteristic.StatusFault, accessory.context.statusFault);
+
+	accessory.context.spillStatus = status.ac_spill;
+	thermostat.setCharacteristic(CustomCharacteristic.SpillStatus, accessory.context.spillStatus);
+
+	accessory.context.timerStatus = status.ac_timer;
+	thermostat.setCharacteristic(CustomCharacteristic.TimerStatus, accessory.context.timerStatus);
 
 	accessory.updateReachability(true);
 	this.log("Finished updating accessory [" + accessory.displayName + "]");
