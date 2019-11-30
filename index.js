@@ -227,12 +227,6 @@ Airtouch.prototype.setupACAccessory = function(accessory) {
 Airtouch.prototype.updateACAccessory = function(accessory, status) {
 	let thermostat = accessory.getService(Service.Thermostat);
 
-	accessory.context.currentTemperature = status.ac_temp;
-	thermostat.setCharacteristic(Characteristic.CurrentTemperature, accessory.context.currentTemperature);
-
-	accessory.context.targetTemperature = status.ac_target;
-	thermostat.setCharacteristic(Characteristic.TargetTemperature, accessory.context.targetTemperature);
-
 	accessory.context.active = status.ac_power_state;
 
 	if (status.ac_power_state == 0) // OFF
@@ -247,6 +241,12 @@ Airtouch.prototype.updateACAccessory = function(accessory, status) {
 
 	accessory.context.targetHeatingCoolingState = accessory.context.currentHeatingCoolingState;
 	thermostat.setCharacteristic(Characteristic.TargetHeatingCoolingState, accessory.context.targetHeatingCoolingState);
+
+	accessory.context.currentTemperature = status.ac_temp;
+	thermostat.setCharacteristic(Characteristic.CurrentTemperature, accessory.context.currentTemperature);
+
+	accessory.context.targetTemperature = status.ac_target;
+	thermostat.setCharacteristic(Characteristic.TargetTemperature, accessory.context.targetTemperature);
 
 	// convert AC fan speed number in AC fan speed string (e.g. 4 => High)
 	let fan_speed = Object.keys(MAGIC.AC_FAN_SPEEDS).find(key => MAGIC.AC_FAN_SPEEDS[key] === status.ac_fan_speed);
@@ -269,20 +269,22 @@ Airtouch.prototype.updateACAccessory = function(accessory, status) {
 
 // setup Zone accessory callbacks
 Airtouch.prototype.setupZoneAccessory = function(accessory) {
+	return;
 	accessory.getService(Service.AccessoryInformation)
 		.setCharacteristic(Characteristic.Manufacturer, "Polyaire")
 		.setCharacteristic(Characteristic.Model, "Quick Fix Damper")
 		.setCharacteristic(Characteristic.SerialNumber, accessory.context.serial.toString());
 
-	let damper = accessory.getService(Service.Fanv2);
-	if (damper === undefined)
-		damper = accessory.addService(Service.Fanv2, accessory.displayName);
+	let zone = accessory.getService(Service.Switch);
+	if (zone === undefined)
+		zone = accessory.addService(Service.Switch, accessory.displayName);
 
-	damper
-		.getCharacteristic(Characteristic.Active)
-		.on("get", this.zoneGetActive.bind(accessory))
+	zone
+		.getCharacteristic(Characteristic.On)
+		.on("get", function(cb){ return cb(null, this.context.active); }.bind(accessory))
 		.on("set", this.zoneSetActive.bind(accessory));
 
+	/*
 	damper
 		.getCharacteristic(Characteristic.RotationSpeed)
 		.setProps({
@@ -291,81 +293,115 @@ Airtouch.prototype.setupZoneAccessory = function(accessory) {
 			maxValue: 100})
 		.on("get", this.zoneGetDamperPosition.bind(accessory))
 		.on("set", this.zoneSetDamperPosition.bind(accessory));
+	*/
 
-	damper
+	zone
 		.getCharacteristic(Characteristic.Name)
 		.on("get", function(cb){ return cb(null, this.displayName); }.bind(accessory));
 
-	damper.isPrimaryService = true;
-
+	zone.isPrimaryService = true;
 	this.log("Finished creating accessory [" + accessory.displayName + "]");
 };
 
 // update Zone accessory data
 Airtouch.prototype.updateZoneAccessory = function(accessory, status) {
-	let damper = accessory.getService(Service.Fanv2);
+	return;
+	let zone = accessory.getService(Service.Switch);
+	let damper = accessory.getService(Service.Window);
 	let thermostat = accessory.getService(Service.Thermostat);
 	let sensor = accessory.getService(Service.TemperatureSensor);
 
 	accessory.context.active = status.group_power_state % 2;
-	damper.setCharacteristic(Characteristic.Active, accessory.context.active);
+	zone.setCharacteristic(Characteristic.Active, accessory.context.active);
 
+	// add/update temperature sensor if sensor exists
+	if (status.group_has_sensor) {
+		accessory.context.sensorTemperature = status.group_temp;
+		accessory.context.sensorBatteryLow = status.group_battery_low;
+		if (sensor === undefined) {
+			sensor = accessory.addService(Service.TemperatureSensor);
+			sensor
+				.getCharacteristic(Characteristic.CurrentTemperature)
+				.on("get", function(cb){ return cb(null, this.context.sensorTemperature); }.bind(accessory));
+			sensor
+				.getCharacteristic(Characteristic.StatusLowBattery)
+				.on("get", function(cb){ return cb(null, this.context.sensorBatteryLow); }.bind(accessory));
+			sensor
+				.getCharacteristic(Characteristic.Name)
+				.on("get", function(cb){ return cb(null, this.displayBane + " Sensor"); }.bind(accessory));
+			zone.addLinkedService(sensor);
+		}
+		sensor.setCharacteristic(Characteristic.CurrentTemperature, accessory.context.sensorTemperature);
+		sensor.setCharacteristic(Characteristic.StatusLowBattery, accessory.context.sensorBatteryLow);
+	} else {
+		if (typeof sensor != "undefined")
+			accessory.removeService(sensor);
+	}
+
+	// add/update damper if control_type == 0
 	accessory.context.damperPosition = status.group_damper_position;
 	if (status.group_control_type == 0) { // damper control
-		// set R/W permissions for damper
-		damper_perms = [Characteristic.Perms.READ, Characteristic.Perms.WRITE, Characteristic.Perms.NOTIFY];
 		// remove thermostat
-		if (typeof thermostat != "undefined" ) {
+		if (typeof thermostat != "undefined" )
 			accessory.removeService(Service.Thermostat);
+		// add damper
+		if (damper === undefined) {
+			damper = accessory.addService(Service.Window);
+			damper
+				.getCharacteristic(Characteristic.CurrentPosition)
+				.on("get", function(cb){ return cb(null, this.context.damperPosition); }.bind(accessory));
+			damper
+				.getCharacteristic(Characteristic.TargetPosition)
+				.on("get", function(cb){ return cb(null, this.context.damperPosition); }.bind(accessory))
+				.on("set", this.zoneSetDamperPosition.bind(accessory));
+			damper
+				.getCharacteristic(Characteristic.Name)
+				.on("get", function(cb){ return cb(null, this.displayName + " Damper"); }.bind(accessory));
+			zone.addLinkedService(damper);
 		}
-		// add/update temperature sensor if sensor exists
-		if (status.group_has_sensor) {
-			if (sensor === undefined) {
-				sensor = accessory.addService(Service.TemperatureSensor);
-			}
-			sensor.setCharacteristic(Characteristic.CurrentTemperature, status.group_temp);
-			sensor.setCharacteristic(Characteristic.StatusLowBattery, status.group_battery_low);
-		} else {
-			if (typeof sensor != "undefined")
-				accessory.removeService(Service.TemperatureSensor);
-		}
-	} else if (group.group_has_sensor) { // temperature control
-		// set R/O permissions for damper
-		damper_perms = [Characteristic.Perms.READ, Characteristic.Perms.NOTIFY];
-		// remove temperature sensor
-		// add/update thermostat if temperature sensor exists
-		let thermostat = accessory.getService(Service.Thermostat);
+		// update damper
+		damper.setCharacteristic(Characteristic.CurrentPosition, accessory.context.damperPosition);
+		damper.setCharacteristic(Characteristic.TargetPosition, accessory.context.damperPosition);
+	}
+	
+	// add/update thermostat if control_type == 1
+	accessory.context.targetTemperature = status.group_target;
+	if (status.group_control_type == 1 && status.group_has_sensor) {
+		// remove damper
+		if (typeof damper != "undefined")
+			accessory.removeService(Service.Window);
+		// add thermostat
 		if (thermostat === undefined) {
 			thermostat = accessory.addService(Service.Thermostat);
+			//thermostat
+			//	.getCharacteristic(Characteristic.Active)
+			//	.on("get", function(cb){ return cb(null, this.context.active); }.bind(accessory))
+			//	.on("set", this.zoneSetActive.bind(accessory));
 			// zone thermostat has only ON and AUTO
 			thermostat
-				.getCharacteristic(Characteristic.CurrentHeatingCoolingState)
-				.setProps({ validValues: [0, 3] });
+				.getCharacteristic(Characteristic.CurrentHeaterCoolerState)
+				.setProps({ validValues: [1] }) // TODO: change 1/idle to only 2 or only 3 depending on AC status; set props when changing AC state
+				.setValue(1);
 			thermostat
-				.getCharacteristic(Characteristic.TargetHeatingCoolingState)
-				.setProps({ validValues: [0, 3] });
-			// TODO: add callbacks
+				.addCharacteristic(Characteristic.TargetHeaterCoolerState)
+				.setProps({ validValues: [2] }) // TODO: change 0/auto to only 1 or only 2 depending on AC status; set props when chancing AC stats
+				.setValue(2);
+			zone
+				.addCharacteristic(Characteristic.CurrentTemperature)
+				.on("get", function(cb){ return cb(null, this.context.sensorTemperature); }.bind(accessory));
+			thermostat
+				.addCharacteristic(Characteristic.HeatingThresholdTemperature)
+				.on("get", function(cb){ return cb(null, this.context.targetTemperature); }.bind(accessory))
+				.on("set", this.zoneSetTargetTemperature.bind(accessory));
+			zone.addLinkedService(thermostat);
 		}
-		thermostat.setCharacteristic(Characteristic.CurrentHeatingCoolingState, status.group_power_state > 0 ? 3 : 0);
-		thermostat.setCharacteristic(Characteristic.TargetHeatingCoolingState, status.group_power_state > 0 ? 3 : 0);
-		thermostat.setCharacteristic(Characteristic.CurrentTemperature, status.group_temp);
-		thermostat.setCharacteristic(Characteristic.TargetTemperature, status.group_target);
-		thermostat.setCharacteristic(Characteristic.TemperatureDisplayUnit, 0);
+		//thermostat.setCharacteristic(Characteristic.Active, accessory.context.active);
+		//thermostat.setCharacteristic(Characteristic.CurrentTemperature, accessory.context.sensorTemperature);
+		zone.setCharacteristic(Characteristic.HeatingThresholdTemperature, accessory.context.targetTemperature);
 	}
-	damper.setCharacteristic(Characteristic.RotationSpeed, accessory.context.damperPosition);
-	damper
-		.getCharacteristic(Characteristic.RotationSpeed)
-		.setProps({perms: damper_perms});
 
-	accessory.context.currentTemperature = status.group_temp;
-	accessory.context.targetTemperature = status.group_target;
-	accessory.context.battery_low = status.group_battery_low;
-	accessory.context.has_sensor = status.group_has_sensor;
-	accessory.context.has_turbo = status.group_has_turbo;
-	accessory.context.has_spill = status.group_has_spill;
-
-	this.log("Finished updating accessory [" + accessory.displayName + "]");
 	accessory.updateReachability(true);
+	this.log("Finished updating accessory [" + accessory.displayName + "]");
 };
 
 /* ----------------------------------------------------------------------------------------------------- */
@@ -410,20 +446,13 @@ Airtouch.prototype.acSetTemperatureDisplayUnits = function(val, cb) {
 
 /* Zone accessory functions */
 
-Airtouch.prototype.zoneGetActive = function(cb) {
-	this.log(this.context);
-	cb(null, this.context.active);
-};
 
 Airtouch.prototype.zoneSetActive = function(val, cb) {
 	if (this.context.active != val) {
+		this.context.active = val;
 		this.api.zoneSetActive(this.context.serial, val);
 	}
 	cb();
-};
-
-Airtouch.prototype.zoneGetDamperPosition = function(cb) {
-	cb(null, this.context.damperPosition);
 };
 
 Airtouch.prototype.zoneSetDamperPosition = function(val, cb) {
@@ -433,6 +462,15 @@ Airtouch.prototype.zoneSetDamperPosition = function(val, cb) {
 	}
 	cb();
 };
+
+Airtouch.prototype.zoneSetTargetTemperature = function(val, cb) {
+	if (this.context.targetTemperature != val) {
+		this.context.targetTemperature = val;
+		this.log("*** SETTING TARGET TEMPERATRUE: " + val);
+		this.log("*** *** ***")
+	}
+	cb();
+}
 
 /* /Zone accessory functions */
 
