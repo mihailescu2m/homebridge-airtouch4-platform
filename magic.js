@@ -49,4 +49,30 @@ module.exports = {
 	AC_UNIT_DEFAULT: 0,
 
 	AC_TARGET_KEEP: 63,
+
+	GROUP_POWER_STATES: {
+		KEEP: 0,
+		NEXT: 1,
+		OFF: 2,
+		ON: 3,
+		TURBO: 5
+	},
+
+	GROUP_CONTROL_TYPES: {
+		KEEP: 0,
+		NEXT: 1,
+		DAMPER: 2,
+		TEMPERATURE: 3
+	},
+
+	GROUP_TARGET_TYPES: {
+		KEEP: 0,
+		DECREMENT: 2,
+		INCREMENT: 3,
+		DAMPER: 4,
+		TEMPERATURE: 5
+	},
+
+	GROUP_NUMBER_DEFAULT: 0
+
 }

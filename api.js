@@ -102,7 +102,7 @@ AirtouchAPI.prototype.acSetCurrentHeatingCoolingState = function(unit_number, st
 				ac_mode: MAGIC.AC_MODES.AUTO,
 			};
 	}
-	this.log("API | Setting heating/cooling state to: " + JSON.stringify(target));
+	this.log("API | Setting AC heating/cooling state to: " + JSON.stringify(target));
 	let data = this.encode_ac_control(target);
 	this.send(MAGIC.MSGTYPE_AC_CTRL, data);
 };
@@ -113,7 +113,7 @@ AirtouchAPI.prototype.acSetTargetTemperature = function(unit_number, temp) {
 		ac_unit_number: unit_number,
 		ac_target_value: temp,
 	};
-	this.log("API | Setting target temperature " + JSON.stringify(target));
+	this.log("API | Setting AC target temperature " + JSON.stringify(target));
 	let data = this.encode_ac_control(target);
 	this.send(MAGIC.MSGTYPE_AC_CTRL, data);
 };
@@ -124,7 +124,7 @@ AirtouchAPI.prototype.acSetFanSpeed = function(unit_number, speed) {
 		ac_unit_number: unit_number,
 		ac_fan_speed: speed,
 	};
-	this.log("API | Setting fan speed " + JSON.stringify(target));
+	this.log("API | Setting AC fan speed " + JSON.stringify(target));
 	let data = this.encode_ac_control(target);
 	this.send(MAGIC.MSGTYPE_AC_CTRL, data);
 };
@@ -167,24 +167,38 @@ AirtouchAPI.prototype.decode_ac_status = function(data) {
 	this.emit("ac_status", ac_status);
 };
 
+// encode a message for AC command
+AirtouchAPI.prototype.encode_group_control = function(group) {
+	let byte1 = isNull(group.group_number, MAGIC.GROUP_NUMBER_DEFAULT);
+	let byte2 = isNull(group.group_power_state, MAGIC.GROUP_POWER_STATES.KEEP);
+	byte2 = byte2 | ((isNull(group.group_control_type, MAGIC.GROUP_CONTROL_TYPES.KEEP)) << 3);
+	byte2 = byte2 | ((isNull(group.group_target_type, MAGIC.GROUP_TARGET_TYPES.KEEP)) << 5);
+	let byte3 = group.group_target || 0;
+	let byte4 = 0;
+	return Buffer.from([byte1, byte2, byte3, byte4]);
+};
+
 // send command to change zone power state (ON/OFF)
 AirtouchAPI.prototype.zoneSetActive = function(group_number, active) {
 	target = {
 		group_number: group_number,
-		group_power_state: active
+		group_power_state: active ? MAGIC.GROUP_POWER_STATES.ON : MAGIC.GROUP_POWER_STATES.OFF,
 	};
 	this.log("API | Setting zone state: " + JSON.stringify(target));
-	this.log("**********************************");
+	let data = this.encode_group_control(target);
+	this.send(MAGIC.MSGTYPE_GRP_CTRL, data);
 };
 
 // send command to set damper position
 AirtouchAPI.prototype.zoneSetDamperPosition = function(group_number, position) {
 	target = {
 		group_number: group_number,
-		value: position
+		group_target_type: MAGIC.GROUP_TARGET_TYPES.DAMPER,
+		group_target: position,
 	};
 	this.log("API | Setting damper position: " + JSON.stringify(target));
-	this.log("**********************************");
+	let data = this.encode_group_control(target);
+	this.send(MAGIC.MSGTYPE_GRP_CTRL, data);
 };
 
 // send command to get group status
@@ -233,8 +247,8 @@ AirtouchAPI.prototype.connect = function(address) {
 	this.device.connect(9004, address, () => {
 		this.log("API | Connected to Airtouch");
 		// request information from Airtouch after connection
-		this.GET_AC_STATUS();
-		this.GET_GROUP_STATUS();
+		setTimeout(function() { this.GET_AC_STATUS(); }.bind(this), 0);
+		setTimeout(function() { this.GET_GROUP_STATUS(); }.bind(this), 2000);
 	});
 	this.device.on("close", () => {
 		this.log("API | Disconnected from Airtouch");
