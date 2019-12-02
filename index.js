@@ -142,6 +142,11 @@ Airtouch.prototype.onGroupsStatusNotification = function(groups_status) {
 
 // setup AC accessory callbacks
 Airtouch.prototype.setupACAccessory = function(accessory) {
+	accessory.on('identify', (paired, cb) => {
+		this.log(accessory.displayName, " identified");
+		cb();
+	});
+
 	accessory.getService(Service.AccessoryInformation)
 		.setCharacteristic(Characteristic.Manufacturer, accessory.context.manufacturer)
 		.setCharacteristic(Characteristic.Model, accessory.context.model)
@@ -272,6 +277,11 @@ Airtouch.prototype.updateACAccessory = function(accessory, status) {
 
 // setup Zone accessory callbacks
 Airtouch.prototype.setupZoneAccessory = function(accessory) {
+	accessory.on('identify', (paired, cb) => {
+		this.log(accessory.displayName, " identified");
+		vb();
+	});
+
 	accessory.getService(Service.AccessoryInformation)
 		.setCharacteristic(Characteristic.Manufacturer, "Polyaire")
 		.setCharacteristic(Characteristic.Model, "Quick Fix Damper")
