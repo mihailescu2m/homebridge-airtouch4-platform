@@ -2,7 +2,7 @@ const util = require("util");
 const emitter = require("events").EventEmitter;
 const MAGIC = require("./magic");
 const AirtouchAPI = require("./api");
-var Accessory, Service, Characteristic, UUIDGen;
+var Accessory, Service, Characteristic, UUIDGen, FakeGatoHistoryService;
 var CustomCharacteristic = {};
 
 module.exports = function (homebridge) {
@@ -10,6 +10,7 @@ module.exports = function (homebridge) {
 	Service = homebridge.hap.Service;
 	Characteristic = homebridge.hap.Characteristic;
 	UUIDGen = homebridge.hap.uuid;
+	FakeGatoHistoryService = require("fakegato-history")(homebridge);
 
 	// AC Spill Custom Characteristic
 	CustomCharacteristic.SpillStatus = function() {
@@ -213,6 +214,9 @@ Airtouch.prototype.setupACAccessory = function(accessory) {
 		.on("get", function(cb){ return cb(null, this.context.timerStatus); }.bind(accessory));
 
 	thermostat.isPrimaryService = true;
+
+	accessory.historyService = new FakeGatoHistoryService("thermo", accessory, { storage: "fs" });
+
 	this.log("Finished creating accessory [" + accessory.displayName + "]");
 };
 
@@ -244,6 +248,14 @@ Airtouch.prototype.updateACAccessory = function(accessory, status) {
 	// convert AC fan speed string into homebridge fan rotation % (e.g. High => 99%) using the config array
 	accessory.context.rotationSpeed = accessory.context.fan_speeds.indexOf(fan_speed) * accessory.context.rotation_step;
 	thermostat.setCharacteristic(Characteristic.RotationSpeed, accessory.context.rotationSpeed);
+
+	// save history as Eve Thermo
+	accessory.historyService.addEntry({
+		time: new Date().getTime() / 1000,
+		currentTemp: accessory.context.currentTemperature,
+		setTemp: accessory.context.targetTemperature,
+		valvePosition: accessory.context.rotationSpeed
+	});
 
 	accessory.context.statusFault = status.ac_error_code;
 	thermostat.setCharacteristic(Characteristic.StatusFault, accessory.context.statusFault);
@@ -322,6 +334,8 @@ Airtouch.prototype.setupZoneAccessory = function(accessory) {
 	sensor.setHiddenService(true);
 	zone.addLinkedService(sensor);
 
+	accessory.historyService = new FakeGatoHistoryService("room", accessory, { storage: "fs" });
+
 	this.log("Finished creating accessory [" + accessory.displayName + "]");
 };
 
@@ -333,6 +347,8 @@ Airtouch.prototype.updateZoneAccessory = function(accessory, status) {
 
 	accessory.context.active = status.group_power_state % 2;
 	zone.setCharacteristic(Characteristic.Active, accessory.context.active);
+
+	accessory.context.controlType = status.group_control_type;
 
 	accessory.context.damperPosition = status.group_damper_position;
 	damper.setCharacteristic(Characteristic.CurrentPosition, accessory.context.damperPosition);
@@ -347,6 +363,13 @@ Airtouch.prototype.updateZoneAccessory = function(accessory, status) {
 
 		accessory.context.sensorLowBattery = status.group_battery_low;
 		sensor.setCharacteristic(Characteristic.StatusLowBattery, accessory.context.sensorLowBattery);
+
+		// save history as Eve Room
+		accessory.historyService.addEntry({
+			time: new Date().getTime() / 1000,
+			temp: accessory.context.currentTemperature,
+			status: accessory.context.active
+		});
 	}
 
 	accessory.updateReachability(true);
@@ -399,7 +422,8 @@ Airtouch.prototype.zoneSetActive = function(val, cb) {
 };
 
 Airtouch.prototype.zoneSetDamperPosition = function(val, cb) {
-	if (this.context.damperPosition != val) {
+	// set damper position only when percentage control type is selected
+	if (this.context.damperPosition != val && this.context.controlType + 2 == MAGIC.GROUP_CONTROL_TYPES.DAMPER) {
 		this.context.damperPositon = val;
 		this.api.zoneSetDamperPosition(this.context.serial, val);
 	}
