@@ -305,6 +305,23 @@ Airtouch.prototype.setupZoneAccessory = function(accessory) {
 		.getCharacteristic(Characteristic.Name)
 		.on("get", function(cb){ return cb(null, this.displayName + " Damper"); }.bind(accessory));
 
+	zone.addLinkedService(damper);
+
+	let sensor = accessory.getService(Service.TemperatureSensor);
+	if (sensor === undefined)
+		sensor = accessory.addService(Service.TemperatureSensor, accessory.displayName + " Sensor");
+
+	sensor
+		.getCharacteristic(Characteristic.CurrentTemperature)
+		.on("get", function(cb){ return cb(null, this.context.currentTemperature); }.bind(accessory));
+
+	sensor
+		.getCharacteristic(Characteristic.StatusLowBattery)
+		.on("get", function(cb){ return cb(null, this.context.sensorLowBattery); }.bind(accessory));
+
+	sensor.setHiddenService(true);
+	zone.addLinkedService(sensor);
+
 	this.log("Finished creating accessory [" + accessory.displayName + "]");
 };
 
@@ -312,6 +329,7 @@ Airtouch.prototype.setupZoneAccessory = function(accessory) {
 Airtouch.prototype.updateZoneAccessory = function(accessory, status) {
 	let zone = accessory.getService(Service.Switch);
 	let damper = accessory.getService(Service.Window);
+	let sensor = accessory.getService(Service.TemperatureSensor);
 
 	accessory.context.active = status.group_power_state % 2;
 	zone.setCharacteristic(Characteristic.Active, accessory.context.active);
@@ -319,6 +337,17 @@ Airtouch.prototype.updateZoneAccessory = function(accessory, status) {
 	accessory.context.damperPosition = status.group_damper_position;
 	damper.setCharacteristic(Characteristic.CurrentPosition, accessory.context.damperPosition);
 	damper.setCharacteristic(Characteristic.TargetPosition, accessory.context.damperPosition);
+
+	if (status.group_has_sensor) {
+		if (sensor.isHiddenService)
+			sensor.setHiddenService(false);
+
+		accessory.context.currentTemperature = status.group_temp;
+		sensor.setCharacteristic(Characteristic.CurrentTemperature, accessory.context.currentTemperature);
+
+		accessory.context.sensorLowBattery = status.group_battery_low;
+		sensor.setCharacteristic(Characteristic.StatusLowBattery, accessory.context.sensorLowBattery);
+	}
 
 	accessory.updateReachability(true);
 	this.log("Finished updating accessory [" + accessory.displayName + "]");
