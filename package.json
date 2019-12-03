@@ -1,12 +1,14 @@
 {
   "name": "homebridge-airtouch4-platform",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Plugin for homebridge to connect to Airtouch4 AC controller",
   "main": "index.js",
   "keywords": [
-    "homebridge-plugin"
+    "homebridge-plugin",
+	"airtouch",
+	"air conditioner"
   ],
-  "author": "Marian Mihailescu",
+  "author": "Marian Mihailescu <mihailescu2m@gmail.com>",
   "license": "ISC",
   "repository": {
     "type": "git",
@@ -17,7 +19,8 @@
     "node": ">=0.12.0"
   },
   "dependencies": {
-    "node-persist": "^2.1.0"
+    "node-persist": "^2.1.0",
+	"fakegato-history": "^0.5.6"
   },
   "bugs": {
     "url": "https://github.com/mihailescu2m/homebridge-airtouch4-platform/issues"
