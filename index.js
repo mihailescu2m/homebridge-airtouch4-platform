@@ -363,6 +363,8 @@ Airtouch.prototype.updateZoneAccessory = function(accessory, status) {
 	zone.setCharacteristic(Characteristic.Active, accessory.context.active);
 
 	accessory.context.controlType = status.group_control_type;
+	// when using temperature control, set the damper as obstructed
+	damper.setCharacteristic(Characteristic.ObstructionDetected, accessory.context.controlType);
 
 	accessory.context.damperPosition = status.group_damper_position;
 	damper.setCharacteristic(Characteristic.CurrentPosition, accessory.context.damperPosition);
@@ -536,6 +538,10 @@ Airtouch.prototype.zoneSetDamperPosition = function(val, cb) {
 	if (this.context.controlType == MAGIC.GROUP_CONTROL_TYPES.DAMPER - 2 && this.context.damperPosition != val) {
 		this.context.damperPositon = val;
 		this.api.zoneSetDamperPosition(this.context.serial, val);
+	} else if (this.context.damperPosition != val) {
+		// reset the GUI to the old damper position when temperature control type is selected
+		this.getService(Service.Window).setCharacteristic(Characteristic.CurrentPosition, this.context.damperPosition);
+		this.getService(Service.Window).setCharacteristic(Characteristic.TargetPosition, this.context.damperPosition);
 	}
 	cb();
 };
@@ -546,9 +552,9 @@ Airtouch.prototype.zoneSetDamperPosition = function(val, cb) {
 
 Airtouch.prototype.thermoSetActive = function(val, cb) { // 0 = OFF, 3 = AUTO (ON)
 	// sets control type
-	if (this.context.active != val % 2) {
-		this.context.active = val % 2;
-		this.api.zoneSetControlType(this.context.serial, val % 2); // 0 = DAMPER (OFF), 1 = TEMPERATURE (ON)
+	if (this.context.active != (val % 2)) {
+		this.context.active = (val % 2);
+		this.api.zoneSetControlType(this.context.serial, (val % 2)); // 0 = DAMPER (OFF), 1 = TEMPERATURE (ON)
 	}
 	cb();
 };
