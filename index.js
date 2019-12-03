@@ -53,6 +53,7 @@ function Airtouch(log, config, api) {
 	// initialize accessory lists
 	this.units = {};
 	this.zones = {};
+	this.thermostats = {};
 
 	// set up callbacks from API
 	util.inherits(AirtouchAPI, emitter);
@@ -84,6 +85,9 @@ Airtouch.prototype.configureAccessory = function(accessory) {
 	if (accessory.displayName.startsWith("AC")) {
 		this.setupACAccessory(accessory);
 		this.units[accessory.displayName] = accessory;
+	} else if (accessory.displayName.startsWith("Zone") && accessory.displayName.endsWith("Thermostat")) {
+		this.setupThermoAccessory(accessory);
+		this.thermostats[accessory.displayName] = accessory;
 	} else if (accessory.displayName.startsWith("Zone")) {
 		this.setupZoneAccessory(accessory);
 		this.zones[accessory.displayName] = accessory;
@@ -279,12 +283,12 @@ Airtouch.prototype.updateACAccessory = function(accessory, status) {
 Airtouch.prototype.setupZoneAccessory = function(accessory) {
 	accessory.on('identify', (paired, cb) => {
 		this.log(accessory.displayName, " identified");
-		vb();
+		cb();
 	});
 
 	accessory.getService(Service.AccessoryInformation)
-		.setCharacteristic(Characteristic.Manufacturer, "Polyaire")
-		.setCharacteristic(Characteristic.Model, "Quick Fix Damper")
+		.setCharacteristic(Characteristic.Manufacturer, accessory.context.manufacturer)
+		.setCharacteristic(Characteristic.Model, accessory.context.model)
 		.setCharacteristic(Characteristic.SerialNumber, accessory.context.serial.toString());
 
 	let zone = accessory.getService(Service.Switch);
@@ -380,11 +384,108 @@ Airtouch.prototype.updateZoneAccessory = function(accessory, status) {
 			temp: accessory.context.currentTemperature,
 			status: accessory.context.active
 		});
+
+		// update thermostat accessory
+		thermo_name = accessory.displayName + " Thermostat";
+		this.log("Updating [" + thermo_name + "]");
+		// check if accessory exists
+		if (!(thermo_name in this.thermostats)) {
+			this.log("[" + thermo_name + "] was not found, creating as new Thermostat accessory...");
+			let uuid = UUIDGen.generate(thermo_name);
+			let thermo = new Accessory(thermo_name, uuid);
+			thermo.log = this.log;
+			thermo.api = this.api;
+			thermo.context.manufacturer = "Polyaire";
+			thermo.context.model = "Temperature Control Thermostat";
+			thermo.context.serial = status.group_number;
+			this.setupThermoAccessory(thermo);
+			this.thermostats[thermo_name] = thermo;
+			this.platform.registerPlatformAccessories("homebridge-airtouch4-platform", "Airtouch", [thermo]);
+		}
+		// update accessory
+		this.updateThermoAccessory(this.thermostats[thermo_name], status);
 	}
 
 	accessory.updateReachability(true);
 	this.log("Finished updating accessory [" + accessory.displayName + "]");
 };
+
+// setup Thermo accessory callbacks
+Airtouch.prototype.setupThermoAccessory = function(accessory) {
+	accessory.on('identify', (paired, cb) => {
+		this.log(accessory.displayName, " identified");
+		cb();
+	});
+
+	accessory.getService(Service.AccessoryInformation)
+		.setCharacteristic(Characteristic.Manufacturer, accessory.context.manufacturer)
+		.setCharacteristic(Characteristic.Model, accessory.context.model)
+		.setCharacteristic(Characteristic.SerialNumber, accessory.context.serial.toString());
+
+	let thermo = accessory.getService(Service.Thermostat);
+	if (thermo === undefined)
+		thermo = accessory.addService(Service.Thermostat, accessory.displayName);
+
+	thermo
+		.getCharacteristic(Characteristic.CurrentHeatingCoolingState)
+		.on("get", function(cb){ return cb(null, this.context.active); }.bind(accessory));
+
+	thermo
+		.getCharacteristic(Characteristic.TargetHeatingCoolingState)
+		.setProps({
+			minStep: 3,
+			minValue: 0,
+			maxValue: 3,
+			validValues: [0, 3]})
+		.on("get", function(cb){ return cb(null, this.context.active ? 3 : 0); }.bind(accessory))
+		.on("set", this.thermoSetActive.bind(accessory));
+
+	thermo
+		.getCharacteristic(Characteristic.CurrentTemperature)
+		.on("get", function(cb){ return cb(null, this.context.currentTemperature); }.bind(accessory));
+
+	thermo
+		.getCharacteristic(Characteristic.TargetTemperature)
+		.setProps({
+			minStep: 1.0,
+			minValue: 14.0,
+			maxValue: 29.0})
+		.on("get", function(cb){ return cb(null, this.context.targetTemperature); }.bind(accessory))
+		.on("set", this.thermoSetTargetTemperature.bind(accessory));
+
+	accessory.context.temperatureDisplayUnits = 0; // defaults to Celsius
+	thermo
+		.getCharacteristic(Characteristic.TemperatureDisplayUnits)
+		.on("get", function(cb){ return cb(null, this.context.temperatureDisplayUnits); }.bind(accessory))
+		.on("set", function(val, cb){ this.context.temperatureDisplayUnits = val; cb(); }.bind(accessory));
+
+	thermo
+		.getCharacteristic(Characteristic.Name)
+		.on("get", function(cb){ return cb(null, this.displayName); }.bind(accessory));
+
+	thermo.isPrimaryService = true;
+
+	this.log("Finished creating accessory [" + accessory.displayName + "]");
+};
+
+// update Thermo accessory data
+Airtouch.prototype.updateThermoAccessory = function(accessory, status) {
+	let thermo = accessory.getService(Service.Thermostat);
+
+	accessory.context.active = status.group_has_sensor && status.group_control_type;
+	thermo.setCharacteristic(Characteristic.CurrentHeatingCoolingState, accessory.context.active);
+	thermo.setCharacteristic(Characteristic.TargetHeatingCoolingState, accessory.context.active * 3);
+
+	accessory.context.currentTemperature = status.group_temp;
+	thermo.setCharacteristic(Characteristic.CurrentTemperature, accessory.context.currentTemperature);
+
+	accessory.context.targetTemperature = status.group_target;
+	thermo.setCharacteristic(Characteristic.TargetTemperature, accessory.context.targetTemperature);
+
+	accessory.updateReachability(true);
+	this.log("Finished updating accessory [" + accessory.displayName + "]");
+};
+
 
 /* ----------------------------------------------------------------------------------------------------- */
 
@@ -422,7 +523,6 @@ Airtouch.prototype.acSetRotationSpeed = function(val, cb) {
 
 /* Zone accessory functions */
 
-
 Airtouch.prototype.zoneSetActive = function(val, cb) {
 	if (this.context.active != val) {
 		this.context.active = val;
@@ -433,7 +533,7 @@ Airtouch.prototype.zoneSetActive = function(val, cb) {
 
 Airtouch.prototype.zoneSetDamperPosition = function(val, cb) {
 	// set damper position only when percentage control type is selected
-	if (this.context.damperPosition != val && this.context.controlType + 2 == MAGIC.GROUP_CONTROL_TYPES.DAMPER) {
+	if (this.context.controlType == MAGIC.GROUP_CONTROL_TYPES.DAMPER - 2 && this.context.damperPosition != val) {
 		this.context.damperPositon = val;
 		this.api.zoneSetDamperPosition(this.context.serial, val);
 	}
@@ -441,4 +541,26 @@ Airtouch.prototype.zoneSetDamperPosition = function(val, cb) {
 };
 
 /* /Zone accessory functions */
+
+/* Thermo accessory functions */
+
+Airtouch.prototype.thermoSetActive = function(val, cb) { // 0 = OFF, 3 = AUTO (ON)
+	// sets control type
+	if (this.context.active != val % 2) {
+		this.context.active = val % 2;
+		this.api.zoneSetControlType(this.context.serial, val % 2); // 0 = DAMPER (OFF), 1 = TEMPERATURE (ON)
+	}
+	cb();
+};
+
+Airtouch.prototype.thermoSetTargetTemperature = function(val, cb) {
+	// sets zone target temperature
+	if (this.context.active && this.context.targetTemperature != val) {
+		this.context.targetTemperature = val;
+		this.api.zoneSetTargetTemperature(this.context.serial, val);
+	}
+	cb();
+};
+
+/* /Thermo accessory functions */
 

@@ -201,6 +201,29 @@ AirtouchAPI.prototype.zoneSetDamperPosition = function(group_number, position) {
 	this.send(MAGIC.MSGTYPE_GRP_CTRL, data);
 };
 
+// send command to set control type (0 = DAMPER, 1 = TEMPERATURE)
+AirtouchAPI.prototype.zoneSetControlType = function(group_number, type) {
+	target = {
+		group_number: group_number,
+		group_control_type: MAGIC.GROUP_CONTROL_TYPES.DAMPER + type,
+	};
+	this.log("API | Setting control type: " + JSON.stringify(target));
+	let data = this.encode_group_control(target);
+	this.send(MAGIC.MSGTYPE_GRP_CTRL, data);
+};
+
+// send command to set target temperature
+AirtouchAPI.prototype.zoneSetTargetTemperature = function(group_number, temp) {
+	target = {
+		group_number: group_number,
+		group_target_type: MAGIC.GROUP_TARGET_TYPES.TEMPERATURE,
+		group_target: temp,
+	};
+	this.log("API | Setting target temperature: " + JSON.stringify(target));
+	let data = this.encode_group_control(target);
+	this.send(MAGIC.MSGTYPE_GRP_CTRL, data);
+};
+
 // send command to get group status
 AirtouchAPI.prototype.GET_GROUP_STATUS = function() {
 	// due to a bug, cannot send empty data
