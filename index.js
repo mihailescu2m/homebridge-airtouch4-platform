@@ -225,6 +225,7 @@ Airtouch.prototype.setupACAccessory = function(accessory) {
 	thermostat.isPrimaryService = true;
 
 	accessory.historyService = new FakeGatoHistoryService("thermo", accessory, { storage: "fs" });
+	accessory.historyUpdate = 0;
 
 	this.log("Finished creating accessory [" + accessory.displayName + "]");
 };
@@ -259,12 +260,16 @@ Airtouch.prototype.updateACAccessory = function(accessory, status) {
 	thermostat.setCharacteristic(Characteristic.RotationSpeed, accessory.context.rotationSpeed);
 
 	// save history as Eve Thermo
-	accessory.historyService.addEntry({
-		time: new Date().getTime() / 1000,
-		currentTemp: accessory.context.currentTemperature,
-		setTemp: accessory.context.targetTemperature,
-		valvePosition: accessory.context.rotationSpeed
-	});
+	let now = new Date().getTime() / 1000;
+	if (now - accessory.historyUpdate > 285) { // 285s = 4.75 min update intervals
+		accessory.historyService.addEntry({
+			time: now,
+			currentTemp: accessory.context.currentTemperature,
+			setTemp: accessory.context.targetTemperature,
+			valvePosition: accessory.context.rotationSpeed
+		});
+		accessory.historyUpdate = now;
+	}
 
 	accessory.context.statusFault = status.ac_error_code;
 	thermostat.setCharacteristic(Characteristic.StatusFault, accessory.context.statusFault);

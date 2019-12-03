@@ -272,8 +272,8 @@ AirtouchAPI.prototype.connect = function(address) {
 		// request information from Airtouch after connection
 		setTimeout(this.GET_AC_STATUS.bind(this), 0);
 		setTimeout(this.GET_GROUP_STATUS.bind(this), 2000);
-		// schedule group status every 5 minutes to get updates for FakeGato history service
-		setInterval(this.GET_GROUP_STATUS.bind(this), 300000);
+		// schedule group status every 4.75 minutes to get updates for FakeGato history service
+		setInterval(this.GET_GROUP_STATUS.bind(this), 285000);
 	});
 	this.device.on("close", () => {
 		this.log("API | Disconnected from Airtouch");
