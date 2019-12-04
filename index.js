@@ -353,7 +353,7 @@ Airtouch.prototype.setupZoneAccessory = function(accessory) {
 	sensor.setHiddenService(true);
 	zone.addLinkedService(sensor);
 
-	accessory.historyService = new FakeGatoHistoryService("switch", accessory, { storage: "fs" });
+	accessory.historyService = new FakeGatoHistoryService("room", accessory, { storage: "fs" });
 
 	this.log("Finished creating accessory [" + accessory.displayName + "]");
 };
@@ -388,6 +388,7 @@ Airtouch.prototype.updateZoneAccessory = function(accessory, status) {
 		// save history as Eve Light Switch
 		accessory.historyService.addEntry({
 			time: new Date().getTime() / 1000,
+			temp: accessory.context.currentTemperature,
 			status: accessory.context.active
 		});
 
@@ -412,11 +413,15 @@ Airtouch.prototype.updateZoneAccessory = function(accessory, status) {
 		this.updateThermoAccessory(this.thermostats[thermo_name], status);
 
 		// show temperature in the AC accessory
-		let ac = Object.values(this.units)[0]; // get "AC 0"
+		let ac = Object.entries(this.units)[0][1]; // get "AC 0"
 		let ac_sensor = ac.getService(accessory.displayName); // get sensor "Zone <N>" from ac
-		if (ac_sensor === undefined)
-			ac.addService(Service.TemperatureSensor, accessory.displayName, accessory.displayName);
-		ac_sensor.setCharacteristic(Characteristic.CurrentTemperature, accessory.context.currentTemperature);
+		if (this.config["ac_include_temps"] == true) {
+			if (ac_sensor === undefined)
+				ac.addService(Service.TemperatureSensor, accessory.displayName, accessory.displayName);
+			ac_sensor.setCharacteristic(Characteristic.CurrentTemperature, accessory.context.currentTemperature);
+		} else {
+			ac.removeService(ac_sensor);
+		}
 	}
 
 	accessory.updateReachability(true);
@@ -441,7 +446,7 @@ Airtouch.prototype.setupThermoAccessory = function(accessory) {
 
 	thermo
 		.getCharacteristic(Characteristic.CurrentHeatingCoolingState)
-		.on("get", function(cb){ return cb(null, this.context.active); }.bind(accessory));
+		.on("get", function(cb){ return cb(null, this.context.currentHeatingCoolingState); }.bind(accessory));
 
 	thermo
 		.getCharacteristic(Characteristic.TargetHeatingCoolingState)
@@ -478,7 +483,7 @@ Airtouch.prototype.setupThermoAccessory = function(accessory) {
 
 	thermo.isPrimaryService = true;
 
-	accessory.historyService = new FakeGatoHistoryService("room", accessory, { storage: "fs" });
+	//accessory.historyService = new FakeGatoHistoryService("room", accessory, { storage: "fs" });
 
 	this.log("Finished creating accessory [" + accessory.displayName + "]");
 };
@@ -488,8 +493,11 @@ Airtouch.prototype.updateThermoAccessory = function(accessory, status) {
 	let thermo = accessory.getService(Service.Thermostat);
 
 	accessory.context.active = status.group_has_sensor && status.group_control_type;
-	thermo.setCharacteristic(Characteristic.CurrentHeatingCoolingState, accessory.context.active);
 	thermo.setCharacteristic(Characteristic.TargetHeatingCoolingState, accessory.context.active * 3);
+
+	let ac = Object.entries(this.units)[0][1];
+	accessory.context.currentHeatingCoolingState = accessory.context.active * ac.getService(Service.Thermostat).getCharacteristic(Characteristic.CurrentHeatingCoolingState).value;
+	thermo.setCharacteristic(Characteristic.CurrentHeatingCoolingState, accessory.context.currentHeatingCoolingState);
 
 	accessory.context.currentTemperature = status.group_temp;
 	thermo.setCharacteristic(Characteristic.CurrentTemperature, accessory.context.currentTemperature);
@@ -498,10 +506,10 @@ Airtouch.prototype.updateThermoAccessory = function(accessory, status) {
 	thermo.setCharacteristic(Characteristic.TargetTemperature, accessory.context.targetTemperature);
 
 	// save history as Eve Room
-	accessory.historyService.addEntry({
-		time: new Date().getTime() / 1000,
-		temp: accessory.context.currentTemperature
-	});
+	//accessory.historyService.addEntry({
+	//	time: new Date().getTime() / 1000,
+	//	temp: accessory.context.currentTemperature
+	//});
 
 	accessory.updateReachability(true);
 	this.log("Finished updating accessory [" + accessory.displayName + "]");

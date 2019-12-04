@@ -33,7 +33,7 @@ function crc16(buffer) {
 
 // check if value is undefined, and replace it with a default value
 function isNull(val, nullVal) {
-	return typeof(val) === "undefined" ? nullVal : val;
+	return val === undefined ? nullVal : val;
 };
 
 // send message to the Airtouch Touchpad Controller
