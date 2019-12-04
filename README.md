@@ -47,6 +47,7 @@ It uses the Homekit `Thermostat` service, and can set AC OFF/HEAT/COOL/AUTO and 
 Apple Home does not support fan speed for thermostat, so fan speed control is available only in 3rd party apps, like Elgato Eve.
 There are custom fields such as "Spill Active" and "Timer Set" received from the Airtouch4 console that are also available only on 3rd party apps.
 Thermostat uses FakeGato service for temperature history, which is available only in the Eve app.
+When using ITC sensors, zones temperature information is included.
 
 
 #### `Zone` - created for each Airtouch group (e.g. `Zone 0`, `Zone 1`, ...)
