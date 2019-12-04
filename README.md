@@ -16,6 +16,7 @@
 		"platform": "Airtouch",
 		"name": "Airtouch",
 		"ip_address": "192.168.0.10",
+		"ac_include_temps": false,
 		"units": [
 			{
 				"manufacturer": "LG",
@@ -34,6 +35,7 @@
 | `platform` | Must be `Airtouch` |
 | `name` | Name for the platform |
 | `ip_address` | Airtouch4 console IP address, can be found under "System Settings" -> "WiFi Settings", click the three-dots icon in the upper right corner, select "Advanced" in the popup menu |
+| `ac_include_temps` | Add zone temperature information in the AC accessory page |
 | `units` | Array with information about your AC units, containing: |
 | `manufacturer` _(optional)_ | Appears under "Manufacturer" for your AC accessory in the Home app |
 | `model` _(optional)_ | Appears under "Model" for your AC accessory in the Home app |
@@ -59,7 +61,7 @@ It uses 3 Homekit services:
 * `Window` - for damper control. Window in Homekit represents a motorized control that can open/close a window and can be set open to a specific position (in %). This control is the most compatible to the damper percentage control. From the Apple home interface you can set it in 5% increments, the Eve app has options only to "Open" (100%) and "Close" (0%). Damper is being set to the desired value only if zone is set to percentage control type, when using temperature control the Damper shows up as "Obstructed" and cannot be set.
 * `Temperature Sensor` - it's a hidden service that is only shown if you have an Airtouch temperature sensor (ITC) in the zone.
 
-Switch uses FakeGato service for status change history, available only in the Eve app.
+Temperature Sensor uses FakeGato service for temperature history, available only in the Eve app.
 
 #### `Temperature Control Thermostat` - created for each group that has a sensor (e.g. `Zone 0 Thermostat`, ...)
 
@@ -67,6 +69,5 @@ It uses the Homekit `Thermostat` service, which can be set to:
 * OFF: set the group to percentage control mode, and use the damper control. Only current temperature from ITC sensor is available.
 * ON/AUTO: set the group to temperature control mode. Thermostat is set to AUTO mode, since only the AC unit can control HEAT/COOL modes. Used to set target temperature and automatically set damper position for the zone.
 
-Zone thermostat uses FakeGato service for zone temperature history, available only in the Eve app.
 
 
