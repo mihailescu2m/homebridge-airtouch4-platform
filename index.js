@@ -353,7 +353,7 @@ Airtouch.prototype.setupZoneAccessory = function(accessory) {
 	sensor.setHiddenService(true);
 	zone.addLinkedService(sensor);
 
-	accessory.historyService = new FakeGatoHistoryService("room", accessory, { storage: "fs" });
+	accessory.historyService = new FakeGatoHistoryService("switch", accessory, { storage: "fs" });
 
 	this.log("Finished creating accessory [" + accessory.displayName + "]");
 };
@@ -385,10 +385,9 @@ Airtouch.prototype.updateZoneAccessory = function(accessory, status) {
 		accessory.context.sensorLowBattery = status.group_battery_low;
 		sensor.setCharacteristic(Characteristic.StatusLowBattery, accessory.context.sensorLowBattery);
 
-		// save history as Eve Room
+		// save history as Eve Light Switch
 		accessory.historyService.addEntry({
 			time: new Date().getTime() / 1000,
-			temp: accessory.context.currentTemperature,
 			status: accessory.context.active
 		});
 
@@ -479,6 +478,8 @@ Airtouch.prototype.setupThermoAccessory = function(accessory) {
 
 	thermo.isPrimaryService = true;
 
+	accessory.historyService = new FakeGatoHistoryService("room", accessory, { storage: "fs" });
+
 	this.log("Finished creating accessory [" + accessory.displayName + "]");
 };
 
@@ -495,6 +496,12 @@ Airtouch.prototype.updateThermoAccessory = function(accessory, status) {
 
 	accessory.context.targetTemperature = status.group_target;
 	thermo.setCharacteristic(Characteristic.TargetTemperature, accessory.context.targetTemperature);
+
+	// save history as Eve Room
+	accessory.historyService.addEntry({
+		time: new Date().getTime() / 1000,
+		temp: accessory.context.currentTemperature
+	});
 
 	accessory.updateReachability(true);
 	this.log("Finished updating accessory [" + accessory.displayName + "]");
