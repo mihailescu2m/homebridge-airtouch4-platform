@@ -411,6 +411,13 @@ Airtouch.prototype.updateZoneAccessory = function(accessory, status) {
 		}
 		// update accessory
 		this.updateThermoAccessory(this.thermostats[thermo_name], status);
+
+		// show temperature in the AC accessory
+		let ac = Object.values(this.units)[0]; // get "AC 0"
+		let ac_sensor = ac.getService(accessory.displayName); // get sensor "Zone <N>" from ac
+		if (ac_sensor === undefined)
+			ac.addService(Service.TemperatureSensor, accessory.displayName, accessory.displayName);
+		ac_sensor.setCharacteristic(Characteristic.CurrentTemperature, accessory.context.currentTemperature);
 	}
 
 	accessory.updateReachability(true);
