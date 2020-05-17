@@ -309,6 +309,10 @@ AirtouchAPI.prototype.connect = function(address) {
 				break;
 		}
 	});
+	// error handling to stop connection errors bringing down homebridge
+	this.device.on("error", function(err) {
+		this.log("API | Connection Error: " + err.message);
+	});
 };
 
 module.exports = AirtouchAPI;
