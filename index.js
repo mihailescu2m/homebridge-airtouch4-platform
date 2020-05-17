@@ -127,7 +127,11 @@ Airtouch.prototype.onACStatusNotification = function(ac_status) {
 // callback for Group messages received from Airtouch Touchpad Controller
 Airtouch.prototype.onGroupsStatusNotification = function(groups_status) {
 	groups_status.forEach(zone_status => {
-		zone_name = "Zone " + zone_status.group_number;
+		if (this.config.use_group_names) {
+			zone_name = "Zone " + this.api.zoneNames["Zone " + zone_status.group_number];
+		} else {
+			zone_name = "Zone " + zone_status.group_number;
+		}
 		this.log("Received status update for [" + zone_name + "]: " + JSON.stringify(zone_status));
 		// check if accessory exists
 		if (!(zone_name in this.zones)) {

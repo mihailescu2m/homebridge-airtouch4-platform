@@ -9,6 +9,25 @@ var net = require("net");
 //
 function AirtouchAPI(log) {
 	this.log = log;
+	this.zoneNames = { // setting default names in case the zone names are not found correctly and enable the feature to be turned off
+		"Zone 0": "0",
+		"Zone 1": "1",
+		"Zone 2": "2",
+		"Zone 3": "3",
+		"Zone 4": "4",
+		"Zone 5": "5",
+		"Zone 6": "6",
+		"Zone 7": "7",
+		"Zone 8": "8",
+		"Zone 9": "9",
+		"Zone 10": "10",
+		"Zone 11": "11",
+		"Zone 12": "12",
+		"Zone 13": "13",
+		"Zone 14": "14",
+		"Zone 15": "15",
+		"Zone 16": "16",
+	};
 };
 
 // messages have the data checksummed using modbus crc16
@@ -30,6 +49,17 @@ function crc16(buffer) {
 	}
 	return crc;
 };
+
+// need to convert hex into ascii text for zone and group names
+function hex_to_ascii(str1)
+ {
+	var hex  = str1.toString();
+	var str = '';
+	for (var n = 0; n < hex.length; n += 2) {
+		str += String.fromCharCode(parseInt(hex.substr(n, 2), 16));
+	}
+	return str;
+ }
 
 // check if value is undefined, and replace it with a default value
 function isNull(val, nullVal) {
@@ -59,6 +89,15 @@ AirtouchAPI.prototype.send = function(type, data) {
 	// send message
 	this.device.write(message);
 };
+
+AirtouchAPI.prototype.sendBufferDirect = function (dataBuffer) {
+	// assemble message
+	// let message = Buffer.from(data);
+	this.log("API | Message to send direct:");
+	this.log(dataBuffer);
+	// send message
+	this.device.write(dataBuffer);
+}
 
 // encode a message for AC command
 AirtouchAPI.prototype.encode_ac_control = function(unit) {
@@ -136,6 +175,15 @@ AirtouchAPI.prototype.GET_AC_STATUS = function() {
 	let data = Buffer.alloc(1);
 	data.writeUInt8(1, 0);
 	this.send(MAGIC.MSGTYPE_AC_STAT, data);
+};
+
+// send command to get full System details
+AirtouchAPI.prototype.GET_SYS_DETAILS = function() {
+	// due to a bug, cannot send empty data
+	// so we send one byte of data
+	this.log("called get sys details");
+	let dataBuffer = Buffer.from(MAGIC.MSGDATA_SYS_DETAILS);
+	this.sendBufferDirect(dataBuffer);
 };
 
 // decode AC status information and send it to homebridge
@@ -264,16 +312,28 @@ AirtouchAPI.prototype.decode_groups_status = function(data) {
 	this.emit("groups_status", groups_status);
 };
 
+// decode groups information and store it
+AirtouchAPI.prototype.decode_sys_details = function(data) {
+	let strData = data.toString("hex");
+	for (i = 0; i < 15; i++) { //16 max group names
+		zoneName = hex_to_ascii(strData.substr(268 + i*16, 16)).replace(/[^\x20-\x7E]/g, '');
+		this.zoneNames["Zone " + i] = zoneName;
+	};
+};
+
 // connect to Airtouch Touchpad Controller socket on tcp port 9004
 AirtouchAPI.prototype.connect = function(address) {
 	this.device = new net.Socket();
 	this.device.connect(9004, address, () => {
 		this.log("API | Connected to Airtouch");
+		this.GET_SYS_DETAILS(); // this should block the timeouts, want to get zone names before everything else happens
+
 		// request information from Airtouch after connection
 		setTimeout(this.GET_AC_STATUS.bind(this), 0);
 		setTimeout(this.GET_GROUP_STATUS.bind(this), 2000);
 		// schedule group status every 4.75 minutes to get updates for FakeGato history service
 		setInterval(this.GET_GROUP_STATUS.bind(this), 285000);
+
 	});
 	this.device.on("close", () => {
 		this.log("API | Disconnected from Airtouch");
@@ -293,7 +353,7 @@ AirtouchAPI.prototype.connect = function(address) {
 		let datalen = this.device.read(2);
 		let data = this.device.read(datalen.readUInt16BE());
 		let crc = this.device.read(2);
-		this.log("API | Received message with id " + msgid + " and data " + data.toString("hex"));
+		this.log("API | Received message with id " + msgid + " and type " + msgtype + " and data " + data.toString("hex"));
 		if (crc.readUInt16BE() != crc16([...header.slice(2), ...datalen, ...data])) {
 			this.log("API | ERROR: invalid crc");
 			return;
@@ -307,6 +367,9 @@ AirtouchAPI.prototype.connect = function(address) {
 				// decode ac status info
 				this.decode_ac_status(data);
 				break;
+			case MAGIC.MSGTYPE_SYS_DETAILS:
+				//decode system details
+				this.decode_sys_details(data);
 		}
 	});
 

@@ -40,6 +40,7 @@
 | `manufacturer` _(optional)_ | Appears under "Manufacturer" for your AC accessory in the Home app |
 | `model` _(optional)_ | Appears under "Model" for your AC accessory in the Home app |
 | `fan` _(required)_ | List with fan speeds that can be set for your AC |
+| `use_group_names` _(optional)_ | Use the display names from the Polyaire groups instead of generic zone names (Warning: changing this after setup will cause zones to appear twice) |
 
 ## Accessories
 
