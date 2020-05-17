@@ -148,7 +148,6 @@ Airtouch.prototype.onGroupsStatusNotification = function(groups_status) {
 Airtouch.prototype.setupACAccessory = function(accessory) {
 	accessory.on('identify', (paired, cb) => {
 		this.log(accessory.displayName, " identified");
-		cb();
 	});
 
 	accessory.getService(Service.AccessoryInformation)
@@ -288,7 +287,6 @@ Airtouch.prototype.updateACAccessory = function(accessory, status) {
 Airtouch.prototype.setupZoneAccessory = function(accessory) {
 	accessory.on('identify', (paired, cb) => {
 		this.log(accessory.displayName, " identified");
-		cb();
 	});
 
 	accessory.getService(Service.AccessoryInformation)
@@ -432,7 +430,6 @@ Airtouch.prototype.updateZoneAccessory = function(accessory, status) {
 Airtouch.prototype.setupThermoAccessory = function(accessory) {
 	accessory.on('identify', (paired, cb) => {
 		this.log(accessory.displayName, " identified");
-		cb();
 	});
 
 	accessory.getService(Service.AccessoryInformation)
