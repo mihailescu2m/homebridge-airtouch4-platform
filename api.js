@@ -58,7 +58,7 @@ function hex_to_ascii(str1)
 	for (var n = 0; n < hex.length; n += 2) {
 		str += String.fromCharCode(parseInt(hex.substr(n, 2), 16));
 	}
-	return str;
+	return str.replace(/[^\x20-\x7E]/g, '');
  }
 
 // check if value is undefined, and replace it with a default value
