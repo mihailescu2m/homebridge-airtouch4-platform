@@ -262,7 +262,7 @@ AirtouchAPI.prototype.decode_groups_status = function(data) {
 		});
 	}
 	this.emit("groups_status", groups_status);
-};		
+};
 
 // connect to Airtouch Touchpad Controller socket on tcp port 9004
 AirtouchAPI.prototype.connect = function(address) {
@@ -309,6 +309,19 @@ AirtouchAPI.prototype.connect = function(address) {
 				break;
 		}
 	});
+
+	// error handling to stop connection errors bringing down homebridge
+	this.device.on("error", function(err) {
+		this.log("API | Connection Error: " + err.message);
+		this.device.destroy(); //close the connection even though its already broken
+		setTimeout(() => {
+			if (!this.device.listening) { //only attempt reconnect if not already re-connected
+				this.log("API | Attempting reconnect");
+				this.emit("attempt_reconnect");
+			}
+		}, 10000);
+	}.bind(this));
+
 };
 
 module.exports = AirtouchAPI;

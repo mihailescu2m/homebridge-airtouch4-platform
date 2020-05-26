@@ -64,6 +64,10 @@ function Airtouch(log, config, api) {
 	this.api.on("groups_status", (group_status) => {
 		this.onGroupsStatusNotification(group_status);
 	});
+	// will try to reconnect on api error - worried this might end up causing a loop..
+	this.api.on("attempt_reconnect", () => {
+		this.api.connect(config.ip_address);
+	});
 
 	// connect to the Airtouch Touchpad Controller
 	this.api.connect(config.ip_address);
